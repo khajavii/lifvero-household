@@ -1,132 +1,103 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateInventoryTables1780000001000
-  implements MigrationInterface
+    implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE TABLE household.inventory_rooms (
-        code varchar(40) PRIMARY KEY,
-
-        translation_key varchar(50) NOT NULL UNIQUE,
-
-        sort_order smallint NOT NULL,
-
-        is_active boolean NOT NULL DEFAULT true
+                                               id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                                               code varchar(40) NOT NULL UNIQUE,
+                                               translation_key varchar(50) NOT NULL UNIQUE,
+                                               sort_order smallint NOT NULL,
+                                               is_active boolean NOT NULL DEFAULT true
       )
     `);
 
     await queryRunner.query(`
       CREATE TABLE household.inventory_categories (
-        code varchar(40) PRIMARY KEY,
-
-        translation_key varchar(50) NOT NULL UNIQUE,
-
-        sort_order smallint NOT NULL,
-
-        is_active boolean NOT NULL DEFAULT true
+                                                    id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                                                    code varchar(40) NOT NULL UNIQUE,
+                                                    translation_key varchar(50) NOT NULL UNIQUE,
+                                                    sort_order smallint NOT NULL,
+                                                    is_active boolean NOT NULL DEFAULT true
       )
     `);
 
     await queryRunner.query(`
       CREATE TABLE household.inventory_warranty_options (
-        code varchar(40) PRIMARY KEY,
+                                                          id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                                                          code varchar(40) NOT NULL UNIQUE,
+                                                          translation_key varchar(50) NOT NULL UNIQUE,
+                                                          duration_months smallint,
+                                                          is_lifetime boolean NOT NULL DEFAULT false,
+                                                          sort_order smallint NOT NULL,
+                                                          is_active boolean NOT NULL DEFAULT true,
 
-        translation_key varchar(50) NOT NULL UNIQUE,
-
-        duration_months smallint,
-
-        is_lifetime boolean NOT NULL DEFAULT false,
-
-        sort_order smallint NOT NULL,
-
-        is_active boolean NOT NULL DEFAULT true,
-
-        CONSTRAINT warranty_duration_check
-          CHECK (
-            (
-              is_lifetime = true
-              AND duration_months IS NULL
-            )
-            OR
-            (
-              is_lifetime = false
-              AND duration_months IS NOT NULL
-              AND duration_months >= 0
-            )
-          )
+                                                          CONSTRAINT warranty_duration_check
+                                                            CHECK (
+                                                              (is_lifetime = true AND duration_months IS NULL)
+                                                                OR
+                                                              (
+                                                                is_lifetime = false
+                                                                  AND duration_months IS NOT NULL
+                                                                  AND duration_months >= 0
+                                                                )
+                                                              )
       )
     `);
 
     await queryRunner.query(`
       CREATE TABLE household.inventory_items (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                               id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                               household_id uuid NOT NULL,
+                                               item_name varchar(150) NOT NULL,
+                                               room_code varchar(40) NOT NULL,
+                                               category_code varchar(40) NOT NULL,
+                                               purchase_date date,
+                                               warranty_code varchar(40),
+                                               created_by varchar(255) NOT NULL,
+                                               created_at timestamptz NOT NULL DEFAULT now(),
+                                               updated_at timestamptz NOT NULL DEFAULT now(),
 
-        household_id uuid NOT NULL,
+                                               CONSTRAINT inventory_items_household_fk
+                                                 FOREIGN KEY (household_id)
+                                                   REFERENCES household.households(id)
+                                                   ON DELETE CASCADE,
 
-        item_name varchar(150) NOT NULL,
+                                               CONSTRAINT inventory_items_room_fk
+                                                 FOREIGN KEY (room_code)
+                                                   REFERENCES household.inventory_rooms(code),
 
-        room_code varchar(40) NOT NULL,
+                                               CONSTRAINT inventory_items_category_fk
+                                                 FOREIGN KEY (category_code)
+                                                   REFERENCES household.inventory_categories(code),
 
-        category_code varchar(40) NOT NULL,
+                                               CONSTRAINT inventory_items_warranty_fk
+                                                 FOREIGN KEY (warranty_code)
+                                                   REFERENCES household.inventory_warranty_options(code),
 
-        purchase_date date,
+                                               CONSTRAINT inventory_items_name_not_blank
+                                                 CHECK (length(btrim(item_name)) > 0),
 
-        warranty_code varchar(40),
-
-        created_by varchar(255) NOT NULL,
-
-        created_at timestamptz NOT NULL DEFAULT now(),
-        updated_at timestamptz NOT NULL DEFAULT now(),
-
-        CONSTRAINT inventory_items_household_fk
-          FOREIGN KEY (household_id)
-          REFERENCES household.households(id)
-          ON DELETE CASCADE,
-
-        CONSTRAINT inventory_items_room_fk
-          FOREIGN KEY (room_code)
-          REFERENCES household.inventory_rooms(code),
-
-        CONSTRAINT inventory_items_category_fk
-          FOREIGN KEY (category_code)
-          REFERENCES household.inventory_categories(code),
-
-        CONSTRAINT inventory_items_warranty_fk
-          FOREIGN KEY (warranty_code)
-          REFERENCES household.inventory_warranty_options(code),
-
-        CONSTRAINT inventory_items_name_not_blank
-          CHECK (length(btrim(item_name)) > 0),
-
-        CONSTRAINT inventory_items_creator_not_blank
-          CHECK (length(btrim(created_by)) > 0)
+                                               CONSTRAINT inventory_items_creator_not_blank
+                                                 CHECK (length(btrim(created_by)) > 0)
       )
     `);
 
     await queryRunner.query(`
       CREATE INDEX inventory_items_household_created_idx
-      ON household.inventory_items (
-        household_id,
-        created_at DESC,
-        id DESC
-      )
+        ON household.inventory_items (household_id, created_at DESC, id DESC)
     `);
 
     await queryRunner.query(`
       CREATE INDEX inventory_items_household_room_idx
-      ON household.inventory_items (
-        household_id,
-        room_code
-      )
+        ON household.inventory_items (household_id, room_code)
     `);
 
     await queryRunner.query(`
       CREATE INDEX inventory_items_household_category_idx
-      ON household.inventory_items (
-        household_id,
-        category_code
-      )
+        ON household.inventory_items (household_id, category_code)
     `);
 
     await queryRunner.query(`
@@ -147,20 +118,9 @@ export class CreateInventoryTables1780000001000
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`
-      DROP TABLE household.inventory_items
-    `);
-
-    await queryRunner.query(`
-      DROP TABLE household.inventory_warranty_options
-    `);
-
-    await queryRunner.query(`
-      DROP TABLE household.inventory_categories
-    `);
-
-    await queryRunner.query(`
-      DROP TABLE household.inventory_rooms
-    `);
+    await queryRunner.query(`DROP TABLE household.inventory_items`);
+    await queryRunner.query(`DROP TABLE household.inventory_warranty_options`);
+    await queryRunner.query(`DROP TABLE household.inventory_categories`);
+    await queryRunner.query(`DROP TABLE household.inventory_rooms`);
   }
 }
