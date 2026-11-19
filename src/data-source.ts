@@ -1,22 +1,15 @@
+import 'reflect-metadata';
 import 'dotenv/config';
+
+import { join } from 'node:path';
 import { DataSource } from 'typeorm';
+import { createDatabaseOptions } from './config/database-options';
 
 export default new DataSource({
-    type: 'postgres',
+    ...createDatabaseOptions(process.env),
 
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT || 5432),
-    username: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_DATABASE,
-
-    entities: ['dist/**/*.entity.js'],
-    migrations: ['dist/migrations/*.js'],
-
-    ssl: {
-        rejectUnauthorized: false,
-    },
-
-    synchronize: false,
-    migrationsRun: false,
+    entities: [join(__dirname, '**', '*.entity.{ts,js}')],
+    migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
+    migrationsTableName: 'household_migrations',
+    migrationsTransactionMode: 'all',
 });
