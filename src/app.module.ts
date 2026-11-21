@@ -6,6 +6,7 @@ import {
 } from '@nestjs/typeorm';
 
 import { AuthModule } from './modules/auth/auth.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { createDatabaseOptions } from './config/database-options';
 
 @Module({
@@ -57,6 +58,7 @@ import { createDatabaseOptions } from './config/database-options';
     }),
 
     AuthModule,
+    InventoryModule,
   ],
 })
 export class AppModule {}

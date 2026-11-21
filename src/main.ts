@@ -1,4 +1,3 @@
-
 import { NestFactory } from '@nestjs/core';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
@@ -26,14 +25,13 @@ async function bootstrap() {
 
     const document = SwaggerModule.createDocument(app, config);
 
-    const swaggerCDN = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14';
+    const swaggerCDN =
+        'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14';
 
     SwaggerModule.setup('api/docs', app, document, {
-        useGlobalPrefix: false,
+        jsonDocumentUrl: 'api/docs-json',
 
-        customCssUrl: [
-            `${swaggerCDN}/swagger-ui.css`,
-        ],
+        customCssUrl: `${swaggerCDN}/swagger-ui.css`,
 
         customJs: [
             `${swaggerCDN}/swagger-ui-bundle.js`,
@@ -41,7 +39,6 @@ async function bootstrap() {
         ],
 
         swaggerOptions: {
-            url: '/api/docs-json',
             persistAuthorization: true,
         },
 
@@ -49,10 +46,12 @@ async function bootstrap() {
     });
 
     const port = process.env.PORT ?? 3000;
+
     await app.listen(port);
 
     Logger.log(`Application is running on port ${port}`);
-    Logger.log('Swagger documentation: /api/docs');
+    Logger.log(`Swagger documentation: /api/docs`);
+    Logger.log(`Swagger JSON: /api/docs-json`);
 }
 
 bootstrap();
