@@ -5,5 +5,7 @@ DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/postgres
 DATABASE_MIGRATION_URL=postgresql://USER:PASSWORD@HOST:5432/postgres
 
 DATABASE_SSL=true
+DB_SSL=true
+DB_SSL_CA_PATH=./certs/prod-ca-2021.crt
 
 DATABASE_SSL_CA_PATH=./certs/supabase-ca.crt
