@@ -2,6 +2,8 @@
 import { InventoryMessages as EnInventoryMessages } from './en/inventory';
 import { AuthMessages as EnAuthMessages } from './en/auth';
 import { DatabaseMessages as EnDatabaseMessages } from './en/database';
+import { HouseholdsMessages as EnHouseholdsMessages } from './en/households';
+import { TransactionMessages as EnTransactionMessages } from './en/transaction';
 
 /**
  * Defines all supported application languages.
@@ -10,7 +12,9 @@ export const Messages = {
     en: {
         inventory: EnInventoryMessages,
         auth: EnAuthMessages,
-        database: EnDatabaseMessages
+        database: EnDatabaseMessages,
+        households: EnHouseholdsMessages,
+        transaction: EnTransactionMessages
     },
 } as const;
 
