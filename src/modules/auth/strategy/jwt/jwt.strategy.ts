@@ -1,14 +1,23 @@
 
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+    Injectable,
+    UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import {messages} from "../../../../messages";
 
+/**
+ * Represents the authenticated user extracted from a JWT.
+ */
 export interface AuthPrincipal {
     userId: string;
-    sessionType: 'account' | 'guest';
 }
 
+/**
+ * Validates access tokens issued by the central Auth Service.
+ */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     constructor(config: ConfigService) {
@@ -16,29 +25,36 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
             secretOrKey: config.getOrThrow<string>('JWT_SECRET'),
             algorithms: ['HS256'],
+            issuer: config.getOrThrow<string>('JWT_ISSUER'),
+            audience: config.getOrThrow<string>('JWT_AUDIENCE'),
             ignoreExpiration: false,
         });
     }
 
+    /**
+     * Validates the JWT payload and extracts the authenticated user ID.
+     *
+     * @param payload - The decoded JWT payload.
+     * @returns The authenticated user principal.
+     * @throws UnauthorizedException If the user ID is invalid.
+     */
     validate(payload: {
         sub?: unknown;
-        exp?: unknown;
-        session_type?: unknown;
     }): AuthPrincipal {
-        const { sub, exp, session_type: sessionType } = payload;
+        const { sub } = payload;
 
         if (
             typeof sub !== 'string' ||
             !sub.trim() ||
-            sub.length > 255 ||
-            typeof exp !== 'number' ||
-            !Number.isInteger(exp) ||
-            (sessionType !== 'account' && sessionType !== 'guest') ||
-            sub.startsWith('guest:') !== (sessionType === 'guest')
+            sub.length > 255
         ) {
-            throw new UnauthorizedException('Invalid access token');
+            throw new UnauthorizedException(
+                messages.auth.INVALID_ACCESS_TOKEN,
+            );
         }
 
-        return { userId: sub, sessionType };
+        return {
+            userId: sub,
+        };
     }
 }

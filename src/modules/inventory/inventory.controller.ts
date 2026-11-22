@@ -19,7 +19,6 @@ import {
 } from '@nestjs/swagger';
 
 import { ResponseHelper } from '../../common/helpers/response.helper';
-import { Messages } from '../../messages';
 
 import {
   InventoryItemDto,
@@ -44,8 +43,7 @@ import {
   InventoryAccountGuard,
   InventoryJwtGuard,
 } from './security/inventory-auth';
-
-const inventoryMessages = Messages.en.inventory;
+import {messages} from "../../messages";
 
 /**
  * Inventory Catalog Controller
@@ -53,7 +51,7 @@ const inventoryMessages = Messages.en.inventory;
  * Handles public inventory lookup requests,
  * including categories, rooms and warranty options.
  */
-@ApiTags(inventoryMessages.CATALOG_TAG)
+@ApiTags(messages.inventory.CATALOG_TAG)
 @Controller('inventory')
 export class InventoryCatalogController {
   constructor(
@@ -65,19 +63,19 @@ export class InventoryCatalogController {
    */
   @Get('categories')
   @ApiOperation({
-    summary: inventoryMessages.LIST_CATEGORIES,
-    description: inventoryMessages.CATEGORIES_DESCRIPTION,
+    summary: messages.inventory.LIST_CATEGORIES,
+    description: messages.inventory.CATEGORIES_DESCRIPTION,
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: inventoryMessages.CATEGORIES_RETRIEVED,
+    description: messages.inventory.CATEGORIES_RETRIEVED,
     type: InventoryLookupDto,
     isArray: true,
   })
   async categories() {
     return ResponseHelper.success(
         await this.catalog.categories(),
-        inventoryMessages.CATEGORIES_RETRIEVED,
+        messages.inventory.CATEGORIES_RETRIEVED,
     );
   }
 
@@ -86,19 +84,19 @@ export class InventoryCatalogController {
    */
   @Get('rooms')
   @ApiOperation({
-    summary: inventoryMessages.LIST_ROOMS,
-    description: inventoryMessages.ROOMS_DESCRIPTION,
+    summary: messages.inventory.LIST_ROOMS,
+    description: messages.inventory.ROOMS_DESCRIPTION,
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: inventoryMessages.ROOMS_RETRIEVED,
+    description: messages.inventory.ROOMS_RETRIEVED,
     type: InventoryLookupDto,
     isArray: true,
   })
   async rooms() {
     return ResponseHelper.success(
         await this.catalog.rooms(),
-        inventoryMessages.ROOMS_RETRIEVED,
+        messages.inventory.ROOMS_RETRIEVED,
     );
   }
 
@@ -107,19 +105,19 @@ export class InventoryCatalogController {
    */
   @Get('warranties')
   @ApiOperation({
-    summary: inventoryMessages.LIST_WARRANTIES,
-    description: inventoryMessages.WARRANTIES_DESCRIPTION,
+    summary: messages.inventory.LIST_WARRANTIES,
+    description: messages.inventory.WARRANTIES_DESCRIPTION,
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: inventoryMessages.WARRANTIES_RETRIEVED,
+    description: messages.inventory.WARRANTIES_RETRIEVED,
     type: InventoryWarrantyDto,
     isArray: true,
   })
   async warranties() {
     return ResponseHelper.success(
         await this.catalog.warranties(),
-        inventoryMessages.WARRANTIES_RETRIEVED,
+        messages.inventory.WARRANTIES_RETRIEVED,
     );
   }
 }
@@ -130,15 +128,15 @@ export class InventoryCatalogController {
  * Handles authenticated inventory operations
  * for the current account.
  */
-@ApiTags(inventoryMessages.PERSONAL_TAG)
+@ApiTags(messages.inventory.PERSONAL_TAG)
 @ApiBearerAuth()
 @ApiResponse({
   status: HttpStatus.UNAUTHORIZED,
-  description: inventoryMessages.UNAUTHORIZED,
+  description: messages.inventory.UNAUTHORIZED,
 })
 @ApiResponse({
   status: HttpStatus.FORBIDDEN,
-  description: inventoryMessages.FORBIDDEN,
+  description: messages.inventory.FORBIDDEN,
 })
 @UseGuards(InventoryJwtGuard, InventoryAccountGuard)
 @Controller('inventory')
@@ -152,20 +150,20 @@ export class PersonalInventoryController {
    */
   @Post('items')
   @ApiOperation({
-    summary: inventoryMessages.CREATE_ITEM,
-    description: inventoryMessages.CREATE_ITEM_DESCRIPTION,
+    summary: messages.inventory.CREATE_ITEM,
+    description: messages.inventory.CREATE_ITEM_DESCRIPTION,
   })
   @ApiBody({
     type: CreateInventoryItemDto,
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
-    description: inventoryMessages.ITEM_CREATED,
+    description: messages.inventory.ITEM_CREATED,
     type: InventoryItemDto,
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: inventoryMessages.INVALID_ITEM,
+    description: messages.inventory.INVALID_ITEM,
   })
   async create(
       @CurrentAccountId() userId: string,
@@ -173,7 +171,7 @@ export class PersonalInventoryController {
   ) {
     return ResponseHelper.success(
         await this.inventory.create(userId, body),
-        inventoryMessages.ITEM_CREATED,
+        messages.inventory.ITEM_CREATED,
         HttpStatus.CREATED,
     );
   }
@@ -183,8 +181,8 @@ export class PersonalInventoryController {
    */
   @Get('items')
   @ApiOperation({
-    summary: inventoryMessages.LIST_ITEMS,
-    description: inventoryMessages.LIST_ITEMS_DESCRIPTION,
+    summary: messages.inventory.LIST_ITEMS,
+    description: messages.inventory.LIST_ITEMS_DESCRIPTION,
   })
   @ApiQuery({
     name: 'page',
@@ -200,12 +198,12 @@ export class PersonalInventoryController {
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: inventoryMessages.ITEMS_RETRIEVED,
+    description: messages.inventory.ITEMS_RETRIEVED,
     type: InventoryPageDto,
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: inventoryMessages.INVALID_PAGINATION,
+    description: messages.inventory.INVALID_PAGINATION,
   })
   async list(
       @CurrentAccountId() userId: string,
@@ -213,7 +211,7 @@ export class PersonalInventoryController {
   ) {
     return ResponseHelper.success(
         await this.inventory.list(userId, query),
-        inventoryMessages.ITEMS_RETRIEVED,
+        messages.inventory.ITEMS_RETRIEVED,
     );
   }
 
@@ -222,12 +220,12 @@ export class PersonalInventoryController {
    */
   @Get('summary')
   @ApiOperation({
-    summary: inventoryMessages.INVENTORY_SUMMARY,
-    description: inventoryMessages.INVENTORY_SUMMARY_DESCRIPTION,
+    summary: messages.inventory.INVENTORY_SUMMARY,
+    description: messages.inventory.INVENTORY_SUMMARY_DESCRIPTION,
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: inventoryMessages.SUMMARY_RETRIEVED,
+    description: messages.inventory.SUMMARY_RETRIEVED,
     type: InventorySummaryDto,
   })
   async summary(
@@ -235,7 +233,7 @@ export class PersonalInventoryController {
   ) {
     return ResponseHelper.success(
         await this.inventory.summary(userId),
-        inventoryMessages.SUMMARY_RETRIEVED,
+        messages.inventory.SUMMARY_RETRIEVED,
     );
   }
 }

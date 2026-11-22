@@ -1,92 +1,422 @@
+
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager, SelectQueryBuilder } from 'typeorm';
 import {
-  InvalidInventoryLookupError, InventoryItem, InventoryPageQuery, InventorySummary,
-  InventoryWriteSettings, NewInventoryItem, PersonalInventoryRepository,
+  InvalidInventoryLookupError,
+  InventoryItem,
+  InventoryPageQuery,
+  InventorySummary,
+  InventoryWriteSettings,
+  NewInventoryItem,
+  PersonalInventoryRepository,
 } from './inventory.repository';
 
-// Both SELECT and INSERT use the same response projection.
-const ITEM_COLUMNS = `i.id, i.household_id AS "householdId", i.item_name AS "itemName",
-  i.room_code AS "roomCode", i.category_code AS "categoryCode",
-  to_char(i.purchase_date, 'YYYY-MM-DD') AS "purchaseDate", i.warranty_code AS "warrantyCode",
-  i.purchase_amount::text AS "purchaseAmount", i.currency,
-  i.created_at AS "createdAt", i.updated_at AS "updatedAt"`;
+/**
+ * Represents the available inventory lookup tables.
+ */
+type InventoryLookupTable =
+    | 'household.inventory_rooms'
+    | 'household.inventory_categories'
+    | 'household.inventory_warranty_options';
 
-// 'My inventory' means items I created in households where I am still a member.
-const PERSONAL_SCOPE = `i.created_by = $1 AND EXISTS (
-  SELECT 1 FROM household.household_members AS m
-  WHERE m.household_id = i.household_id AND m.user_id = $1
-)`;
+/**
+ * Represents the raw result returned when retrieving an inventory item ID.
+ */
+interface InventoryIdRow {
+  id: string;
+}
 
+/**
+ * Represents the raw result returned by the inventory summary query.
+ */
+interface InventorySummaryRow {
+  totalItems: string;
+  valuedItems: string;
+  categories: string;
+  rooms: string;
+  totalValue: string;
+}
+
+/**
+ * Provides the shared inventory item response projection.
+ *
+ * Converts database column names into the InventoryItem response format.
+ *
+ * @param query - The TypeORM select query builder.
+ * @returns The query builder with the inventory item projection.
+ */
+function selectInventoryColumns(
+    query: SelectQueryBuilder<any>,
+): SelectQueryBuilder<any> {
+  return query
+      .select('i.id', 'id')
+      .addSelect('i.household_id', 'householdId')
+      .addSelect('i.item_name', 'itemName')
+      .addSelect('i.room_code', 'roomCode')
+      .addSelect('i.category_code', 'categoryCode')
+      .addSelect("TO_CHAR(i.purchase_date, 'YYYY-MM-DD')", 'purchaseDate')
+      .addSelect('i.warranty_code', 'warrantyCode')
+      .addSelect('i.purchase_amount::text', 'purchaseAmount')
+      .addSelect('i.currency', 'currency')
+      .addSelect('i.created_at', 'createdAt')
+      .addSelect('i.updated_at', 'updatedAt');
+}
+
+/**
+ * Implements personal inventory persistence using PostgreSQL and TypeORM.
+ *
+ * Provides transactional inventory creation, user-scoped pagination,
+ * and aggregated inventory summaries.
+ *
+ * Inventory items are accessible only to their creator while that user
+ * remains a member of the associated household.
+ */
 @Injectable()
-export class PostgresPersonalInventoryRepository implements PersonalInventoryRepository {
-  constructor(@InjectDataSource() private readonly db: DataSource) {}
+export class PostgresPersonalInventoryRepository
+    implements PersonalInventoryRepository
+{
+  /**
+   * Initializes the personal inventory repository.
+   *
+   * @param db - The TypeORM data source used for database operations.
+   */
+  constructor(
+      @InjectDataSource()
+      private readonly db: DataSource,
+  ) {}
 
-  create(userId: string, input: NewInventoryItem, settings: InventoryWriteSettings): Promise<InventoryItem> {
+  /**
+   * Creates a new inventory item for the specified user.
+   *
+   * If the user does not own an existing household, a new household
+   * is created and the user is assigned the owner role.
+   *
+   * The operation is executed inside a transaction to ensure that
+   * household creation and inventory insertion are atomic.
+   *
+   * A PostgreSQL advisory transaction lock prevents concurrent
+   * household creation for the same user across API instances.
+   *
+   * @param userId - The ID of the user creating the inventory item.
+   * @param input - The inventory item creation data.
+   * @param settings - The household and currency configuration.
+   * @returns A promise resolving to the created inventory item.
+   * @throws InvalidInventoryLookupError If the selected room, category,
+   * or warranty does not exist or is inactive.
+   */
+  async create(
+      userId: string,
+      input: NewInventoryItem,
+      settings: InventoryWriteSettings,
+  ): Promise<InventoryItem> {
     return this.db.transaction('READ COMMITTED', async (manager) => {
-      // Serialize first saves for the same account across all running API instances.
-      await manager.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [userId]);
-      const owned: { id: string }[] = await manager.query(
-        `SELECT h.id FROM household.household_members AS m
-          JOIN household.households AS h ON h.id = m.household_id
-         WHERE m.user_id = $1 AND m.role = 'owner'
-         ORDER BY h.created_at, h.id LIMIT 1 FOR SHARE OF h, m`, [userId],
+      await manager.query(
+          'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))',
+          [userId],
       );
-      let householdId = owned[0]?.id;
-      if (!householdId) {
-        const [home]: { id: string }[] = await manager.query(
-          'INSERT INTO household.households (name) VALUES ($1) RETURNING id', [settings.householdName],
-        );
-        householdId = home.id;
-        await manager.query(
-          `INSERT INTO household.household_members (household_id, user_id, role) VALUES ($1, $2, 'owner')`,
-          [householdId, userId],
-        );
+
+      await this.validateLookups(manager, input);
+
+      const householdId = await this.resolveHousehold(
+          manager,
+          userId,
+          settings.householdName,
+      );
+
+      const result = await manager
+          .createQueryBuilder()
+          .insert()
+          .into('household.inventory_items')
+          .values({
+            household_id: householdId,
+            item_name: input.itemName,
+            room_code: input.roomCode,
+            category_code: input.categoryCode,
+            purchase_date: input.purchaseDate,
+            warranty_code: input.warrantyCode,
+            created_by: userId,
+            purchase_amount: input.purchaseAmount ?? null,
+            currency: input.purchaseAmount !== undefined
+                ? settings.currency
+                : null,
+          })
+          .returning(['id'])
+          .execute();
+
+      const itemId = result.identifiers[0]?.id
+          ?? result.raw[0]?.id;
+
+      if (!itemId) {
+        throw new Error('Failed to create inventory item');
       }
 
-      const [item]: InventoryItem[] = await manager.query(
-        `INSERT INTO household.inventory_items AS i
-           (household_id, item_name, room_code, category_code, purchase_date, warranty_code,
-            created_by, purchase_amount, currency)
-         SELECT $1::uuid, $2::varchar, $3::varchar, $4::varchar, $5::date, $6::varchar,
-                $7::varchar, $8::numeric, $9::varchar
-         WHERE EXISTS (SELECT 1 FROM household.inventory_rooms WHERE code = $3 AND is_active)
-           AND EXISTS (SELECT 1 FROM household.inventory_categories WHERE code = $4 AND is_active)
-           AND EXISTS (SELECT 1 FROM household.inventory_warranty_options WHERE code = $6 AND is_active)
-         RETURNING ${ITEM_COLUMNS}`,
-        [householdId, input.itemName, input.roomCode, input.categoryCode, input.purchaseDate,
-          input.warrantyCode, userId, input.purchaseAmount ?? null,
-          input.purchaseAmount === undefined ? null : settings.currency],
-      );
-      // Throw inside the transaction so an invalid first item does not leave an empty house.
-      if (!item) throw new InvalidInventoryLookupError();
+      const item = await this.findItemById(manager, itemId);
+
+      if (!item) {
+        throw new Error('Failed to retrieve the created inventory item');
+      }
+
       return item;
     });
   }
 
-  list(userId: string, page: InventoryPageQuery): Promise<InventoryItem[]> {
-    return this.db.query(
-      `SELECT ${ITEM_COLUMNS} FROM household.inventory_items AS i
-       WHERE ${PERSONAL_SCOPE}
-       ORDER BY i.created_at DESC, i.id DESC LIMIT $2 OFFSET $3`,
-      [userId, page.limit + 1, page.offset],
+  /**
+   * Retrieves a paginated list of inventory items belonging to a user.
+   *
+   * Only items created by the specified user in households where
+   * the user is still an active member are included.
+   *
+   * An additional record is fetched to determine whether another page exists.
+   *
+   * @param userId - The ID of the inventory owner.
+   * @param page - The pagination limit and offset.
+   * @returns A promise resolving to the inventory items.
+   */
+  async list(
+      userId: string,
+      page: InventoryPageQuery,
+  ): Promise<InventoryItem[]> {
+    const query = selectInventoryColumns(
+        this.db
+            .createQueryBuilder()
+            .from('household.inventory_items', 'i'),
     );
+
+    this.applyPersonalScope(query, userId);
+
+    return query
+        .orderBy('i.created_at', 'DESC')
+        .addOrderBy('i.id', 'DESC')
+        .limit(page.limit + 1)
+        .offset(page.offset)
+        .getRawMany<InventoryItem>();
   }
 
-  async summary(userId: string, currency: string): Promise<InventorySummary> {
-    type Row = Record<'totalItems' | 'valuedItems' | 'categories' | 'rooms' | 'totalValue', string>;
-    const [row]: Row[] = await this.db.query(
-      `SELECT count(*) AS "totalItems", count(DISTINCT i.category_code) AS categories,
-              count(DISTINCT i.room_code) AS rooms,
-              count(i.purchase_amount) FILTER (WHERE i.currency = $2) AS "valuedItems",
-              COALESCE(sum(i.purchase_amount) FILTER (WHERE i.currency = $2), 0.00)::text AS "totalValue"
-         FROM household.inventory_items AS i WHERE ${PERSONAL_SCOPE}`,
-      [userId, currency],
-    );
+  /**
+   * Retrieves an aggregated summary of a user's personal inventory.
+   *
+   * Monetary values are calculated only for items matching
+   * the requested currency.
+   *
+   * @param userId - The ID of the inventory owner.
+   * @param currency - The currency used for monetary aggregation.
+   * @returns A promise resolving to the inventory summary.
+   */
+  async summary(
+      userId: string,
+      currency: string,
+  ): Promise<InventorySummary> {
+    const query = this.db
+        .createQueryBuilder()
+        .from('household.inventory_items', 'i')
+        .select('COUNT(*)::text', 'totalItems')
+        .addSelect(
+            'COUNT(DISTINCT i.category_code)::text',
+            'categories',
+        )
+        .addSelect(
+            'COUNT(DISTINCT i.room_code)::text',
+            'rooms',
+        )
+        .addSelect(
+            `COUNT(i.purchase_amount) FILTER (
+          WHERE i.currency = :currency
+        )::text`,
+            'valuedItems',
+        )
+        .addSelect(
+            `COALESCE(
+          SUM(i.purchase_amount) FILTER (
+            WHERE i.currency = :currency
+          ),
+          0.00
+        )::text`,
+            'totalValue',
+        )
+        .setParameter('currency', currency);
+
+    this.applyPersonalScope(query, userId);
+
+    const row = await query.getRawOne<InventorySummaryRow>();
+
     return {
-      totalItems: Number(row.totalItems), totalValue: row.totalValue, currency,
-      valuedItems: Number(row.valuedItems), categories: Number(row.categories), rooms: Number(row.rooms),
+      totalItems: Number(row?.totalItems ?? 0),
+      totalValue: row?.totalValue ?? '0.00',
+      currency,
+      valuedItems: Number(row?.valuedItems ?? 0),
+      categories: Number(row?.categories ?? 0),
+      rooms: Number(row?.rooms ?? 0),
     };
+  }
+
+  /**
+   * Validates the room, category, and warranty selected for an inventory item.
+   *
+   * Each lookup must exist and be active before an inventory item
+   * or a new household can be created.
+   *
+   * @param manager - The transaction entity manager.
+   * @param input - The inventory item creation data.
+   * @throws InvalidInventoryLookupError If any selected lookup is invalid.
+   */
+  private async validateLookups(
+      manager: EntityManager,
+      input: NewInventoryItem,
+  ): Promise<void> {
+    const lookups: Array<{
+      table: InventoryLookupTable;
+      code: string;
+    }> = [
+      {
+        table: 'household.inventory_rooms',
+        code: input.roomCode,
+      },
+      {
+        table: 'household.inventory_categories',
+        code: input.categoryCode,
+      },
+      {
+        table: 'household.inventory_warranty_options',
+        code: input.warrantyCode,
+      },
+    ];
+
+    for (const lookup of lookups) {
+      const exists = await manager
+          .createQueryBuilder()
+          .select('1', 'exists')
+          .from(lookup.table, 'lookup')
+          .where('lookup.code = :code', { code: lookup.code })
+          .andWhere('lookup.is_active = TRUE')
+          .getRawOne();
+
+      if (!exists) {
+        throw new InvalidInventoryLookupError();
+      }
+    }
+  }
+
+  /**
+   * Finds an existing household owned by the user or creates a new one.
+   *
+   * Existing household membership records and household records
+   * are locked for the duration of the transaction.
+   *
+   * @param manager - The transaction entity manager.
+   * @param userId - The ID of the household owner.
+   * @param householdName - The default name for a newly created household.
+   * @returns A promise resolving to the household ID.
+   */
+  private async resolveHousehold(
+      manager: EntityManager,
+      userId: string,
+      householdName: string,
+  ): Promise<string> {
+    const existing = await manager
+        .createQueryBuilder()
+        .select('h.id', 'id')
+        .from('household.household_members', 'm')
+        .innerJoin(
+            'household.households',
+            'h',
+            'h.id = m.household_id',
+        )
+        .where('m.user_id = :userId', { userId })
+        .andWhere("m.role = 'owner'")
+        .orderBy('h.created_at', 'ASC')
+        .addOrderBy('h.id', 'ASC')
+        .limit(1)
+        .setLock('pessimistic_read', undefined, ['h', 'm'])
+        .getRawOne<InventoryIdRow>();
+
+    if (existing) {
+      return existing.id;
+    }
+
+    const result = await manager
+        .createQueryBuilder()
+        .insert()
+        .into('household.households')
+        .values({
+          name: householdName,
+        })
+        .returning(['id'])
+        .execute();
+
+    const householdId = result.identifiers[0]?.id
+        ?? result.raw[0]?.id;
+
+    if (!householdId) {
+      throw new Error('Failed to create household');
+    }
+
+    await manager
+        .createQueryBuilder()
+        .insert()
+        .into('household.household_members')
+        .values({
+          household_id: householdId,
+          user_id: userId,
+          role: 'owner',
+        })
+        .execute();
+
+    return householdId;
+  }
+
+  /**
+   * Retrieves an inventory item by its unique identifier.
+   *
+   * Uses the shared inventory response projection to maintain
+   * a consistent response structure.
+   *
+   * @param manager - The transaction entity manager.
+   * @param itemId - The unique inventory item identifier.
+   * @returns A promise resolving to the inventory item, or null if not found.
+   */
+  private async findItemById(
+      manager: EntityManager,
+      itemId: string,
+  ): Promise<InventoryItem | null> {
+    const query = selectInventoryColumns(
+        manager
+            .createQueryBuilder()
+            .from('household.inventory_items', 'i'),
+    );
+
+    const item = await query
+        .where('i.id = :itemId', { itemId })
+        .getRawOne<InventoryItem>();
+
+    return item ?? null;
+  }
+
+  /**
+   * Applies the personal inventory access restrictions to a query.
+   *
+   * An inventory item must have been created by the specified user,
+   * and the user must still be a member of its associated household.
+   *
+   * @param query - The inventory query builder.
+   * @param userId - The ID of the inventory owner.
+   * @returns The query builder with the personal inventory restrictions.
+   */
+  private applyPersonalScope(
+      query: SelectQueryBuilder<any>,
+      userId: string,
+  ): SelectQueryBuilder<any> {
+    const membershipQuery = query
+        .subQuery()
+        .select('1')
+        .from('household.household_members', 'm')
+        .where('m.household_id = i.household_id')
+        .andWhere('m.user_id = :userId')
+        .getQuery();
+
+    return query
+        .where('i.created_by = :userId', { userId })
+        .andWhere(`EXISTS ${membershipQuery}`)
+        .setParameter('userId', userId);
   }
 }

@@ -1,47 +1,197 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsISO8601, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
+import {
+  IsInt,
+  IsISO8601,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 import type { NewInventoryItem } from '../repositories/inventory.repository';
+import { messages } from '../../../messages';
 
+/**
+ * Regular expression for YYYY-MM-DD date format.
+ */
 const datePattern = /^(?!0000)\d{4}-\d{2}-\d{2}(?![\s\S])/;
-const moneyPattern = /^(?:0|[1-9]\d{0,11})(?:\.\d{1,2})?(?![\s\S])/;
-const codePattern = /^[^\s\x00](?:[^\x00]*[^\s\x00])?(?![\s\S])/u;
-const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
-const queryInt = ({ value }: { value: unknown }) => typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
-const provided = (_object: unknown, value: unknown) => value !== undefined;
 
+/**
+ * Regular expression for non-negative decimal amounts with up to two decimal places.
+ */
+const moneyPattern = /^(?:0|[1-9]\d{0,11})(?:\.\d{1,2})?(?![\s\S])/;
+
+/**
+ * Regular expression for lookup codes without leading or trailing whitespace.
+ */
+const codePattern = /^[^\s\x00](?:[^\x00]*[^\s\x00])?(?![\s\S])/u;
+
+/**
+ * Trims string values before validation.
+ *
+ * @param value - The transformation input.
+ * @returns The trimmed string or the original value.
+ */
+const trim = ({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value;
+
+/**
+ * Converts numeric query string values to numbers.
+ *
+ * @param value - The transformation input.
+ * @returns The converted number or the original value.
+ */
+const queryInt = ({ value }: { value: unknown }) =>
+    typeof value === 'string' && /^\d+$/.test(value)
+        ? Number(value)
+        : value;
+
+/**
+ * Determines whether an optional property was provided.
+ *
+ * @param value - The property value.
+ * @returns True when the value is not undefined.
+ */
+const provided = (_object: unknown, value: unknown) =>
+    value !== undefined;
+
+/**
+ * Data transfer object for creating a personal inventory item.
+ *
+ * Validates item information before passing it to the inventory service.
+ */
 export class CreateInventoryItemDto implements NewInventoryItem {
-  @ApiProperty({ maxLength: 150, example: 'Vacuum cleaner' })
-  @Transform(trim) @IsString() @MinLength(1) @MaxLength(150) @Matches(/^[^\x00]+$/u)
+  /**
+   * Name of the inventory item.
+   */
+  @Transform(trim)
+  @IsString({ message: messages.inventory.VALIDATION_ITEM_NAME_INVALID })
+  @MinLength(1, {
+    message: messages.inventory.VALIDATION_ITEM_NAME_REQUIRED,
+  })
+  @MaxLength(150, {
+    message: messages.inventory.VALIDATION_ITEM_NAME_LENGTH,
+  })
+  @Matches(/^[^\x00]+$/u, {
+    message: messages.inventory.VALIDATION_ITEM_NAME_INVALID,
+  })
   itemName!: string;
 
-  @ApiProperty({ maxLength: 40, description: 'Code returned by GET /inventory/rooms' })
-  @IsString() @MaxLength(40) @Matches(codePattern)
+  /**
+   * Code identifying the room containing the item.
+   */
+  @IsString({
+    message: messages.inventory.VALIDATION_ROOM_CODE_INVALID,
+  })
+  @MaxLength(40, {
+    message: messages.inventory.VALIDATION_ROOM_CODE_INVALID,
+  })
+  @Matches(codePattern, {
+    message: messages.inventory.VALIDATION_ROOM_CODE_INVALID,
+  })
   roomCode!: string;
 
-  @ApiProperty({ maxLength: 40, description: 'Code returned by GET /inventory/categories' })
-  @IsString() @MaxLength(40) @Matches(codePattern)
+  /**
+   * Code identifying the item's category.
+   */
+  @IsString({
+    message: messages.inventory.VALIDATION_CATEGORY_CODE_INVALID,
+  })
+  @MaxLength(40, {
+    message: messages.inventory.VALIDATION_CATEGORY_CODE_INVALID,
+  })
+  @Matches(codePattern, {
+    message: messages.inventory.VALIDATION_CATEGORY_CODE_INVALID,
+  })
   categoryCode!: string;
 
-  @ApiProperty({ type: String, format: 'date', example: '2026-01-20' })
-  @IsString() @Matches(datePattern) @IsISO8601({ strict: true })
+  /**
+   * Date when the item was purchased.
+   *
+   * Must use the YYYY-MM-DD format.
+   */
+  @IsString({
+    message: messages.inventory.VALIDATION_PURCHASE_DATE_INVALID,
+  })
+  @Matches(datePattern, {
+    message: messages.inventory.VALIDATION_PURCHASE_DATE_INVALID,
+  })
+  @IsISO8601(
+      { strict: true },
+      {
+        message: messages.inventory.VALIDATION_PURCHASE_DATE_INVALID,
+      },
+  )
   purchaseDate!: string;
 
-  @ApiProperty({ maxLength: 40, description: 'Code returned by GET /inventory/warranties' })
-  @IsString() @MaxLength(40) @Matches(codePattern)
+  /**
+   * Code identifying the item's warranty option.
+   */
+  @IsString({
+    message: messages.inventory.VALIDATION_WARRANTY_CODE_INVALID,
+  })
+  @MaxLength(40, {
+    message: messages.inventory.VALIDATION_WARRANTY_CODE_INVALID,
+  })
+  @Matches(codePattern, {
+    message: messages.inventory.VALIDATION_WARRANTY_CODE_INVALID,
+  })
   warrantyCode!: string;
 
-  @ApiPropertyOptional({ type: String, pattern: moneyPattern.source, example: '199.99', description: 'Decimal amount in the configured reporting currency' })
-  @ValidateIf(provided) @IsString() @Matches(moneyPattern)
+  /**
+   * Optional purchase amount in the configured reporting currency.
+   *
+   * Must be a non-negative decimal with up to two decimal places.
+   */
+  @ValidateIf(provided)
+  @IsString({
+    message: messages.inventory.VALIDATION_PURCHASE_AMOUNT_INVALID,
+  })
+  @Matches(moneyPattern, {
+    message: messages.inventory.VALIDATION_PURCHASE_AMOUNT_INVALID,
+  })
   purchaseAmount?: string;
 }
 
+/**
+ * Data transfer object for inventory pagination query parameters.
+ */
 export class InventoryPageQueryDto {
-  @ApiPropertyOptional({ type: Number, minimum: 1, description: 'Default and maximum are configured by the server' })
-  @ValidateIf(provided) @Transform(queryInt) @IsInt() @Min(1) @Max(2147483646)
+  /**
+   * Maximum number of inventory items to return.
+   *
+   * Defaults to the server-configured page size.
+   */
+  @ValidateIf(provided)
+  @Transform(queryInt)
+  @IsInt({
+    message: messages.inventory.VALIDATION_LIMIT_INVALID,
+  })
+  @Min(1, {
+    message: messages.inventory.VALIDATION_LIMIT_INVALID,
+  })
+  @Max(2147483646, {
+    message: messages.inventory.VALIDATION_LIMIT_INVALID,
+  })
   limit?: number;
 
-  @ApiPropertyOptional({ type: Number, minimum: 0, default: 0, maximum: Number.MAX_SAFE_INTEGER })
-  @ValidateIf(provided) @Transform(queryInt) @IsInt() @Min(0) @Max(Number.MAX_SAFE_INTEGER)
+  /**
+   * Number of inventory items to skip.
+   *
+   * Defaults to zero.
+   */
+  @ValidateIf(provided)
+  @Transform(queryInt)
+  @IsInt({
+    message: messages.inventory.VALIDATION_OFFSET_INVALID,
+  })
+  @Min(0, {
+    message: messages.inventory.VALIDATION_OFFSET_INVALID,
+  })
+  @Max(Number.MAX_SAFE_INTEGER, {
+    message: messages.inventory.VALIDATION_OFFSET_INVALID,
+  })
   offset?: number;
 }
