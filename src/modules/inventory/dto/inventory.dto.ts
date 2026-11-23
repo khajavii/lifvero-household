@@ -1,3 +1,4 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
   IsInt,
@@ -66,6 +67,11 @@ export class CreateInventoryItemDto implements NewInventoryItem {
   /**
    * Name of the inventory item.
    */
+  @ApiProperty({
+    example: 'Laptop',
+    description: 'Name of the inventory item',
+    maxLength: 150,
+  })
   @Transform(trim)
   @IsString({ message: messages.inventory.VALIDATION_ITEM_NAME_INVALID })
   @MinLength(1, {
@@ -82,6 +88,11 @@ export class CreateInventoryItemDto implements NewInventoryItem {
   /**
    * Code identifying the room containing the item.
    */
+  @ApiProperty({
+    example: 'living_room',
+    description: 'Room code lookup value',
+    maxLength: 40,
+  })
   @IsString({
     message: messages.inventory.VALIDATION_ROOM_CODE_INVALID,
   })
@@ -96,6 +107,11 @@ export class CreateInventoryItemDto implements NewInventoryItem {
   /**
    * Code identifying the item's category.
    */
+  @ApiProperty({
+    example: 'electronics',
+    description: 'Category code lookup value',
+    maxLength: 40,
+  })
   @IsString({
     message: messages.inventory.VALIDATION_CATEGORY_CODE_INVALID,
   })
@@ -112,6 +128,10 @@ export class CreateInventoryItemDto implements NewInventoryItem {
    *
    * Must use the YYYY-MM-DD format.
    */
+  @ApiProperty({
+    example: '2026-01-20',
+    description: 'Purchase date in YYYY-MM-DD format',
+  })
   @IsString({
     message: messages.inventory.VALIDATION_PURCHASE_DATE_INVALID,
   })
@@ -129,6 +149,11 @@ export class CreateInventoryItemDto implements NewInventoryItem {
   /**
    * Code identifying the item's warranty option.
    */
+  @ApiProperty({
+    example: '1_year',
+    description: 'Warranty option lookup code',
+    maxLength: 40,
+  })
   @IsString({
     message: messages.inventory.VALIDATION_WARRANTY_CODE_INVALID,
   })
@@ -145,6 +170,10 @@ export class CreateInventoryItemDto implements NewInventoryItem {
    *
    * Must be a non-negative decimal with up to two decimal places.
    */
+  @ApiPropertyOptional({
+    example: '999.99',
+    description: 'Purchase amount with up to 2 decimal places',
+  })
   @ValidateIf(provided)
   @IsString({
     message: messages.inventory.VALIDATION_PURCHASE_AMOUNT_INVALID,
