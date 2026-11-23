@@ -1,6 +1,8 @@
 
 import { Injectable } from '@nestjs/common';
-import type { EntityManager, DataSource } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import type { EntityManager } from 'typeorm';
+import { DataSource } from 'typeorm';
 
 import { Household } from '../repositories/household.interface';
 import { HouseholdEntity } from '../entities/household.entity';
@@ -25,7 +27,10 @@ export class PostgresHouseholdsRepository extends HouseholdsRepository {
      *
      * @param db - The TypeORM data source used to execute database operations.
      */
-    constructor(private readonly db: DataSource) {
+    constructor(
+        @InjectDataSource()
+        private readonly db: DataSource,
+    ) {
         super();
     }
 

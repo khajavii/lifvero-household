@@ -4,9 +4,12 @@ import { ConfigModule } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
+import { HouseholdsModule } from '../households/households.module';
+
 import { inventoryConfig } from './config/inventory.config';
 
 import { InventoryItemEntity } from './entities/inventory-item.entity';
+
 import {
   InventoryCategoryEntity,
   InventoryRoomEntity,
@@ -57,11 +60,15 @@ import {
       InventoryRoomEntity,
       InventoryWarrantyOptionEntity,
     ]),
+
+    HouseholdsModule,
   ],
+
   controllers: [
     InventoryCatalogController,
     PersonalInventoryController,
   ],
+
   providers: [
     InventoryCatalogService,
     PersonalInventoryService,
@@ -74,11 +81,13 @@ import {
       provide: InventoryCatalogRepository,
       useClass: PostgresInventoryCatalogRepository,
     },
+
     {
       provide: PersonalInventoryRepository,
       useClass: PostgresPersonalInventoryRepository,
     },
   ],
+
   exports: [
     InventoryCatalogService,
     PersonalInventoryService,

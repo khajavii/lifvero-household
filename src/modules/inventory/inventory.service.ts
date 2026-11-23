@@ -1,19 +1,28 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { InjectDataSource } from '@nestjs/typeorm';
-import type { DataSource } from 'typeorm';
+import type { DataSource, EntityManager } from 'typeorm';
+
 import { messages } from '../../messages';
 import { HouseholdsService } from '../households/households.service';
 import { inventoryConfig } from './config/inventory.config';
+
 import type {
   CreateInventoryItemDto,
   InventoryPageQueryDto,
 } from './dto/inventory.dto';
+
 import {
   InvalidInventoryLookupError,
   InventoryCatalogRepository,
   PersonalInventoryRepository,
 } from './repositories/inventory.repository';
+
 import type {
   InventoryItem,
   InventoryLookup,
@@ -21,41 +30,61 @@ import type {
   WarrantyLookup,
 } from './repositories/inventory.repository';
 
-/** Provides read-only access to active inventory catalog options. */
+/**
+ * Provides read-only access to active inventory catalog options.
+ */
 @Injectable()
 export class InventoryCatalogService {
   constructor(
-      @Inject(InventoryCatalogRepository)
       private readonly catalog: InventoryCatalogRepository,
   ) {}
 
-  /** Returns active inventory categories. */
+  /**
+   * Returns active inventory categories.
+   *
+   * @returns A list of active inventory categories.
+   */
   categories(): Promise<InventoryLookup[]> {
     return this.catalog.categories();
   }
 
-  /** Returns active inventory rooms. */
+  /**
+   * Returns active inventory rooms.
+   *
+   * @returns A list of active inventory rooms.
+   */
   rooms(): Promise<InventoryLookup[]> {
     return this.catalog.rooms();
   }
 
-  /** Returns active warranty options. */
+  /**
+   * Returns active warranty options.
+   *
+   * @returns A list of available warranty options.
+   */
   warranties(): Promise<WarrantyLookup[]> {
     return this.catalog.warranties();
   }
 }
 
-/** A page of personal inventory items and its continuation offset. */
+/**
+ * Represents a paginated collection of personal inventory items.
+ */
 export interface PersonalInventoryPage {
   items: InventoryItem[];
   nextOffset: number | null;
 }
 
-/** Coordinates account-scoped inventory use cases. */
+/**
+ * Coordinates account-scoped personal inventory operations.
+ *
+ * This service owns inventory creation transactions and ensures that
+ * household resolution and inventory persistence use the same
+ * TypeORM transaction manager.
+ */
 @Injectable()
 export class PersonalInventoryService {
   constructor(
-      @Inject(PersonalInventoryRepository)
       private readonly items: PersonalInventoryRepository,
       private readonly households: HouseholdsService,
       @InjectDataSource()
@@ -65,37 +94,47 @@ export class PersonalInventoryService {
   ) {}
 
   /**
-   * Resolves the account's household and inserts an item atomically.
+   * Creates a personal inventory item within an atomic transaction.
    *
-   * This service owns the transaction. Both repositories receive the same
-   * manager and must not open separate transactions for this use case.
-   * Errors are mapped only after TypeORM has completed the rollback.
+   * Household ownership is resolved before inserting the inventory item.
+   * Both operations use the same transaction manager to guarantee
+   * consistency and prevent partial writes.
    *
-   * @param userId - The account ID supplied by the authenticated controller.
-   * @param item - The validated request body.
-   * @returns The created item after the transaction commits.
-   * @throws BadRequestException If a selected catalog option is invalid.
+   * @param userId - The authenticated account identifier.
+   * @param item - The validated inventory creation payload.
+   * @returns The created inventory item after the transaction commits.
+   * @throws BadRequestException When a catalog lookup is invalid.
    */
   async create(
       userId: string,
       item: CreateInventoryItemDto,
   ): Promise<InventoryItem> {
     try {
-      return await this.db.transaction('READ COMMITTED', async (tx) => {
-        const householdId = await this.households.resolveOwnedHouseholdId(
-            userId,
-            tx,
-        );
+      return await this.db.transaction(
+          'READ COMMITTED',
+          async (tx: EntityManager): Promise<InventoryItem> => {
+            const householdId =
+                await this.households.resolveOwnedHouseholdId(
+                    userId,
+                    tx,
+                );
 
-        return this.items.create(
-            item,
-            { householdId, userId, currency: this.config.currency },
-            tx,
-        );
-      });
-    } catch (error) {
+            return this.items.create(
+                item,
+                {
+                  householdId,
+                  userId,
+                  currency: this.config.currency,
+                },
+                tx,
+            );
+          },
+      );
+    } catch (error: unknown) {
       if (error instanceof InvalidInventoryLookupError) {
-        throw new BadRequestException(messages.inventory.INVALID_LOOKUP);
+        throw new BadRequestException(
+            messages.inventory.INVALID_LOOKUP,
+        );
       }
 
       throw error;
@@ -103,9 +142,15 @@ export class PersonalInventoryService {
   }
 
   /**
-   * Returns a page of the user's personal inventory.
+   * Retrieves a paginated list of the user's inventory items.
    *
-   * @throws BadRequestException If the pagination bounds are invalid.
+   * The repository fetches one additional record to determine
+   * whether another page is available.
+   *
+   * @param userId - The authenticated account identifier.
+   * @param query - Pagination parameters.
+   * @returns The requested inventory page and its continuation offset.
+   * @throws BadRequestException When pagination bounds are invalid.
    */
   async list(
       userId: string,
@@ -127,16 +172,29 @@ export class PersonalInventoryService {
       );
     }
 
-    const rows = await this.items.list(userId, { limit, offset });
+    const rows = await this.items.list(userId, {
+      limit: limit + 1,
+      offset,
+    });
+
+    const hasNextPage = rows.length > limit;
 
     return {
       items: rows.slice(0, limit),
-      nextOffset: rows.length > limit ? offset + limit : null,
+      nextOffset: hasNextPage ? offset + limit : null,
     };
   }
 
-  /** Returns the user's inventory totals in the configured reporting currency. */
+  /**
+   * Returns the user's inventory totals in the configured currency.
+   *
+   * @param userId - The authenticated account identifier.
+   * @returns The inventory summary.
+   */
   summary(userId: string): Promise<InventorySummary> {
-    return this.items.summary(userId, this.config.currency);
+    return this.items.summary(
+        userId,
+        this.config.currency,
+    );
   }
 }
