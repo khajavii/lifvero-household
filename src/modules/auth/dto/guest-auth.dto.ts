@@ -17,5 +17,5 @@ export class GuestAuthDto {
             message: messages.auth.INVALID_EMAIL,
         },
     )
-    email: string;
+    email!: string;
 }

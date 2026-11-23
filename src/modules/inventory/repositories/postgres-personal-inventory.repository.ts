@@ -2,6 +2,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager, SelectQueryBuilder } from 'typeorm';
+import { InventoryItemEntity } from '../entities/inventory-item.entity';
+import {
+  InventoryCategoryEntity,
+  InventoryRoomEntity,
+  InventoryWarrantyOptionEntity,
+} from '../entities/inventory-lookups.entity';
+import { HouseholdMemberEntity } from '../../household-members/entities/household-member.entity';
 import {
   InvalidInventoryLookupError,
   InventoryItem,
@@ -11,14 +18,6 @@ import {
   NewInventoryItem,
   PersonalInventoryRepository,
 } from './inventory.repository';
-
-/**
- * Represents the available inventory lookup tables.
- */
-type InventoryLookupTable =
-    | 'household.inventory_rooms'
-    | 'household.inventory_categories'
-    | 'household.inventory_warranty_options';
 
 /**
  * Represents the raw result returned by the inventory summary query.
@@ -101,16 +100,16 @@ export class PostgresPersonalInventoryRepository
     const result = await manager
         .createQueryBuilder()
         .insert()
-        .into('household.inventory_items')
+        .into(InventoryItemEntity)
         .values({
-          household_id: settings.householdId,
-          item_name: input.itemName,
-          room_code: input.roomCode,
-          category_code: input.categoryCode,
-          purchase_date: input.purchaseDate,
-          warranty_code: input.warrantyCode,
-          created_by: settings.userId,
-          purchase_amount: input.purchaseAmount ?? null,
+          householdId: settings.householdId,
+          itemName: input.itemName,
+          roomCode: input.roomCode,
+          categoryCode: input.categoryCode,
+          purchaseDate: input.purchaseDate,
+          warrantyCode: input.warrantyCode,
+          createdBy: settings.userId,
+          purchaseAmount: input.purchaseAmount ?? null,
           currency: input.purchaseAmount !== undefined
               ? settings.currency
               : null,
@@ -153,7 +152,7 @@ export class PostgresPersonalInventoryRepository
     const query = selectInventoryColumns(
         this.db
             .createQueryBuilder()
-            .from('household.inventory_items', 'i'),
+            .from(InventoryItemEntity, 'i'),
     );
 
     this.applyPersonalScope(query, userId);
@@ -182,7 +181,7 @@ export class PostgresPersonalInventoryRepository
   ): Promise<InventorySummary> {
     const query = this.db
         .createQueryBuilder()
-        .from('household.inventory_items', 'i')
+        .from(InventoryItemEntity, 'i')
         .select('COUNT(*)::text', 'totalItems')
         .addSelect(
             'COUNT(DISTINCT i.category_code)::text',
@@ -227,41 +226,38 @@ export class PostgresPersonalInventoryRepository
    * Validates the room, category, and warranty selected for an inventory item.
    *
    * Each lookup must exist and be active before an inventory item
-   * or a new household can be created.
+   * can be created.
    *
    * @param manager - The transaction entity manager.
    * @param input - The inventory item creation data.
-   * @throws InvalidInventoryLookupError If any selected lookup is invalid.
+   * @throws InvalidInventoryLookupError If any selected lookup is invalid or inactive.
    */
   private async validateLookups(
       manager: EntityManager,
       input: NewInventoryItem,
   ): Promise<void> {
-    const lookups: Array<{
-      table: InventoryLookupTable;
-      code: string;
-    }> = [
+    const lookups = [
       {
-        table: 'household.inventory_rooms',
+        entity: InventoryRoomEntity,
         code: input.roomCode,
       },
       {
-        table: 'household.inventory_categories',
+        entity: InventoryCategoryEntity,
         code: input.categoryCode,
       },
       {
-        table: 'household.inventory_warranty_options',
+        entity: InventoryWarrantyOptionEntity,
         code: input.warrantyCode,
       },
     ];
 
     for (const lookup of lookups) {
       const exists = await manager
-          .createQueryBuilder()
+          .getRepository(lookup.entity)
+          .createQueryBuilder('lookup')
           .select('1', 'exists')
-          .from(lookup.table, 'lookup')
           .where('lookup.code = :code', { code: lookup.code })
-          .andWhere('lookup.is_active = TRUE')
+          .andWhere('lookup.isActive = TRUE')
           .getRawOne();
 
       if (!exists) {
@@ -287,7 +283,7 @@ export class PostgresPersonalInventoryRepository
     const query = selectInventoryColumns(
         manager
             .createQueryBuilder()
-            .from('household.inventory_items', 'i'),
+            .from(InventoryItemEntity, 'i'),
     );
 
     const item = await query
@@ -314,9 +310,9 @@ export class PostgresPersonalInventoryRepository
     const membershipQuery = query
         .subQuery()
         .select('1')
-        .from('household.household_members', 'm')
-        .where('m.household_id = i.household_id')
-        .andWhere('m.user_id = :userId')
+        .from(HouseholdMemberEntity, 'm')
+        .where('m.householdId = i.household_id')
+        .andWhere('m.userId = :userId')
         .getQuery();
 
     return query

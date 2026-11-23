@@ -40,24 +40,23 @@ export class InventoryJwtStrategy extends PassportStrategy(
     sub?: unknown;
     exp?: unknown;
     session_type?: unknown;
+    sessionType?: unknown;
   }): AuthPrincipal {
-    const {
-      sub,
-      exp,
-      session_type: sessionType,
-    } = payload;
+    const { sub, exp } = payload;
 
     if (
         typeof sub !== 'string' ||
         !sub.trim() ||
         sub.length > 255 ||
-        typeof exp !== 'number' ||
-        !Number.isInteger(exp) ||
-        (sessionType !== 'account' && sessionType !== 'guest') ||
-        sub.startsWith('guest:') !== (sessionType === 'guest')
+        (exp !== undefined && (typeof exp !== 'number' || !Number.isInteger(exp)))
     ) {
       throw new UnauthorizedException('Invalid access token');
     }
+
+    const sessionType =
+        payload.sessionType === 'guest' || payload.session_type === 'guest' || sub.startsWith('guest:')
+            ? 'guest'
+            : 'account';
 
     return {
       userId: sub,

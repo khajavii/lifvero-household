@@ -136,18 +136,19 @@ export class PostgresHouseholdsRepository extends HouseholdsRepository {
             [userId],
         );
 
-        const [owned]: { id: string }[] = await manager.query(
-            `SELECT h.id
-             FROM household.household_members AS m
-                      JOIN household.households AS h ON h.id = m.household_id
-             WHERE m.user_id = $1 AND m.role = 'owner'
-             ORDER BY h.created_at ASC, h.id ASC
-                 LIMIT 1
-             FOR SHARE OF h, m`,
-            [userId],
-        );
+        const owned = await manager
+            .getRepository(HouseholdMemberEntity)
+            .createQueryBuilder('m')
+            .innerJoin(HouseholdEntity, 'h', 'h.id = m.householdId')
+            .select('h.id', 'id')
+            .where('m.userId = :userId', { userId })
+            .andWhere('m.role = :role', { role: 'owner' })
+            .orderBy('h.createdAt', 'ASC')
+            .addOrderBy('h.id', 'ASC')
+            .setLock('pessimistic_read')
+            .getRawOne<{ id: string }>();
 
-        if (owned) {
+        if (owned?.id) {
             return owned.id;
         }
 
