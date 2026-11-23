@@ -46,4 +46,6 @@ export const AuthMessages = {
 
     INVALID_AUTH_SERVICE_TIMEOUT:
         'Invalid authentication service timeout',
+    ACCOUNT_REQUIRED:
+        'Account Request'
 } as const;

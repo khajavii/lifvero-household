@@ -1,4 +1,6 @@
 
+import type { EntityManager } from 'typeorm';
+
 /**
  * Defines the data required to create a new inventory item.
  */
@@ -151,8 +153,11 @@ export interface InventoryPageQuery {
  * Defines configuration settings used when creating inventory items.
  */
 export interface InventoryWriteSettings {
-  /** The default household name used during inventory creation. */
-  householdName: string;
+  /** The identifier of the household to which the item belongs. */
+  householdId: string;
+
+  /** The identifier of the user who owns the inventory item. */
+  userId: string;
 
   /** The currency used for inventory monetary values. */
   currency: string;
@@ -174,18 +179,18 @@ export class InvalidInventoryLookupError extends Error {}
  */
 export abstract class PersonalInventoryRepository {
   /**
-   * Creates a new inventory item for the specified user.
+   * Creates a new inventory item within an active transaction.
    *
-   * @param userId - The ID of the user who owns the inventory item.
    * @param input - The inventory item creation data.
-   * @param settings - The configuration settings used during creation.
+   * @param settings - The context settings including household ID, user ID, and currency.
+   * @param manager - The entity manager associated with the active transaction.
    * @returns A promise resolving to the newly created inventory item.
    * @throws InvalidInventoryLookupError If a selected lookup option is invalid or inactive.
    */
   abstract create(
-      userId: string,
       input: NewInventoryItem,
       settings: InventoryWriteSettings,
+      manager: EntityManager,
   ): Promise<InventoryItem>;
 
   /**

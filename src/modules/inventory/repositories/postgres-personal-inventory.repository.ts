@@ -21,13 +21,6 @@ type InventoryLookupTable =
     | 'household.inventory_warranty_options';
 
 /**
- * Represents the raw result returned when retrieving an inventory item ID.
- */
-interface InventoryIdRow {
-  id: string;
-}
-
-/**
  * Represents the raw result returned by the inventory summary query.
  */
 interface InventorySummaryRow {
@@ -87,78 +80,58 @@ export class PostgresPersonalInventoryRepository
   ) {}
 
   /**
-   * Creates a new inventory item for the specified user.
+   * Creates a new inventory item within an active transaction.
    *
-   * If the user does not own an existing household, a new household
-   * is created and the user is assigned the owner role.
+   * Validates lookup references against active catalog options and inserts
+   * the inventory item linked to the resolved household.
    *
-   * The operation is executed inside a transaction to ensure that
-   * household creation and inventory insertion are atomic.
-   *
-   * A PostgreSQL advisory transaction lock prevents concurrent
-   * household creation for the same user across API instances.
-   *
-   * @param userId - The ID of the user creating the inventory item.
-   * @param input - The inventory item creation data.
-   * @param settings - The household and currency configuration.
+   * @param input - The inventory item creation payload.
+   * @param settings - The context settings including household ID, user ID, and currency.
+   * @param manager - The transaction entity manager.
    * @returns A promise resolving to the created inventory item.
-   * @throws InvalidInventoryLookupError If the selected room, category,
-   * or warranty does not exist or is inactive.
+   * @throws InvalidInventoryLookupError If the selected room, category, or warranty does not exist or is inactive.
    */
   async create(
-      userId: string,
       input: NewInventoryItem,
       settings: InventoryWriteSettings,
+      manager: EntityManager,
   ): Promise<InventoryItem> {
-    return this.db.transaction('READ COMMITTED', async (manager) => {
-      await manager.query(
-          'SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))',
-          [userId],
-      );
+    await this.validateLookups(manager, input);
 
-      await this.validateLookups(manager, input);
+    const result = await manager
+        .createQueryBuilder()
+        .insert()
+        .into('household.inventory_items')
+        .values({
+          household_id: settings.householdId,
+          item_name: input.itemName,
+          room_code: input.roomCode,
+          category_code: input.categoryCode,
+          purchase_date: input.purchaseDate,
+          warranty_code: input.warrantyCode,
+          created_by: settings.userId,
+          purchase_amount: input.purchaseAmount ?? null,
+          currency: input.purchaseAmount !== undefined
+              ? settings.currency
+              : null,
+        })
+        .returning(['id'])
+        .execute();
 
-      const householdId = await this.resolveHousehold(
-          manager,
-          userId,
-          settings.householdName,
-      );
+    const itemId = result.identifiers[0]?.id
+        ?? result.raw[0]?.id;
 
-      const result = await manager
-          .createQueryBuilder()
-          .insert()
-          .into('household.inventory_items')
-          .values({
-            household_id: householdId,
-            item_name: input.itemName,
-            room_code: input.roomCode,
-            category_code: input.categoryCode,
-            purchase_date: input.purchaseDate,
-            warranty_code: input.warrantyCode,
-            created_by: userId,
-            purchase_amount: input.purchaseAmount ?? null,
-            currency: input.purchaseAmount !== undefined
-                ? settings.currency
-                : null,
-          })
-          .returning(['id'])
-          .execute();
+    if (!itemId) {
+      throw new Error('Failed to create inventory item');
+    }
 
-      const itemId = result.identifiers[0]?.id
-          ?? result.raw[0]?.id;
+    const item = await this.findItemById(manager, itemId);
 
-      if (!itemId) {
-        throw new Error('Failed to create inventory item');
-      }
+    if (!item) {
+      throw new Error('Failed to retrieve the created inventory item');
+    }
 
-      const item = await this.findItemById(manager, itemId);
-
-      if (!item) {
-        throw new Error('Failed to retrieve the created inventory item');
-      }
-
-      return item;
-    });
+    return item;
   }
 
   /**
@@ -295,74 +268,6 @@ export class PostgresPersonalInventoryRepository
         throw new InvalidInventoryLookupError();
       }
     }
-  }
-
-  /**
-   * Finds an existing household owned by the user or creates a new one.
-   *
-   * Existing household membership records and household records
-   * are locked for the duration of the transaction.
-   *
-   * @param manager - The transaction entity manager.
-   * @param userId - The ID of the household owner.
-   * @param householdName - The default name for a newly created household.
-   * @returns A promise resolving to the household ID.
-   */
-  private async resolveHousehold(
-      manager: EntityManager,
-      userId: string,
-      householdName: string,
-  ): Promise<string> {
-    const existing = await manager
-        .createQueryBuilder()
-        .select('h.id', 'id')
-        .from('household.household_members', 'm')
-        .innerJoin(
-            'household.households',
-            'h',
-            'h.id = m.household_id',
-        )
-        .where('m.user_id = :userId', { userId })
-        .andWhere("m.role = 'owner'")
-        .orderBy('h.created_at', 'ASC')
-        .addOrderBy('h.id', 'ASC')
-        .limit(1)
-        .setLock('pessimistic_read', undefined, ['h', 'm'])
-        .getRawOne<InventoryIdRow>();
-
-    if (existing) {
-      return existing.id;
-    }
-
-    const result = await manager
-        .createQueryBuilder()
-        .insert()
-        .into('household.households')
-        .values({
-          name: householdName,
-        })
-        .returning(['id'])
-        .execute();
-
-    const householdId = result.identifiers[0]?.id
-        ?? result.raw[0]?.id;
-
-    if (!householdId) {
-      throw new Error('Failed to create household');
-    }
-
-    await manager
-        .createQueryBuilder()
-        .insert()
-        .into('household.household_members')
-        .values({
-          household_id: householdId,
-          user_id: userId,
-          role: 'owner',
-        })
-        .execute();
-
-    return householdId;
   }
 
   /**
