@@ -214,7 +214,7 @@ export class PersonalInventoryService {
   async findById(userId: string, itemId: string): Promise<InventoryItem> {
     const item = await this.items.findById(userId, itemId);
     if (!item) {
-      throw new NotFoundException('Inventory item not found');
+      throw new NotFoundException(messages.inventory.ITEM_NOT_FOUND);
     }
     return item;
   }
@@ -235,7 +235,7 @@ export class PersonalInventoryService {
   ): Promise<InventoryItem> {
     const item = await this.items.updateActiveStatus(userId, itemId, isActive);
     if (!item) {
-      throw new NotFoundException('Inventory item not found');
+      throw new NotFoundException(messages.inventory.ITEM_NOT_FOUND);
     }
     return item;
   }
@@ -253,7 +253,7 @@ export class PersonalInventoryService {
   async delete(userId: string, itemId: string): Promise<boolean> {
     const deleted = await this.items.softDelete(userId, itemId);
     if (!deleted) {
-      throw new NotFoundException('Inventory item not found');
+      throw new NotFoundException(messages.inventory.ITEM_NOT_FOUND);
     }
     return true;
   }

@@ -4,7 +4,15 @@ import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { HttpExceptionResponseFilter } from './common/filters/http-exception-response.filter';
 
-async function bootstrap() {
+/**
+ * Initializes and bootstraps the NestJS application.
+ *
+ * Configures global exception filtering, request validation pipes, Swagger API documentation,
+ * and launches the HTTP listener on the configured port.
+ *
+ * @returns A promise that resolves when the server has started successfully.
+ */
+async function bootstrap(): Promise<void> {
     const app = await NestFactory.create(AppModule, {
         logger: ['log', 'error', 'warn', 'debug', 'verbose'],
     });
@@ -21,8 +29,8 @@ async function bootstrap() {
     );
 
     const config = new DocumentBuilder()
-        .setTitle('Authentication API')
-        .setDescription('Authentication endpoints documentation')
+        .setTitle('Lifvero Household API')
+        .setDescription('Household and personal inventory service endpoints documentation')
         .setVersion('1.0')
         .addBearerAuth()
         .build();
@@ -46,7 +54,7 @@ async function bootstrap() {
             persistAuthorization: true,
         },
 
-        customSiteTitle: 'Lifvero Authentication API',
+        customSiteTitle: 'Lifvero Household API',
     });
 
     const port = process.env.PORT ?? 3000;

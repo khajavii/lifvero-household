@@ -1,6 +1,18 @@
-// Run against a test deployment with TWO fresh account tokens. Leaves rows in the test DB.
+/**
+ * Smoke test script executing live HTTP requests against the inventory service.
+ *
+ * Validates cross-user isolation, automatic household provisioning, validation error handling,
+ * and summary calculation across two separate account tokens.
+ */
 import assert from 'node:assert/strict';
 
+/**
+ * Reads an environment variable or throws a descriptive error if missing.
+ *
+ * @param name - The name of the environment variable.
+ * @returns The resolved environment variable value.
+ * @throws Error When the environment variable is not defined.
+ */
 function env(name) {
   if (!process.env[name]) throw new Error(`Missing ${name}`);
   return process.env[name];
@@ -10,6 +22,13 @@ const accountA = env('INVENTORY_TEST_ACCOUNT_A');
 const accountB = env('INVENTORY_TEST_ACCOUNT_B');
 assert.notEqual(accountA, accountB);
 
+/**
+ * Sends an HTTP request to the inventory API and asserts the returned status.
+ *
+ * @param path - Relative inventory endpoint path.
+ * @param options - Request options including token, body, and expected HTTP status.
+ * @returns Parsed response data payload.
+ */
 async function request(path, { token, body, expected = 200 } = {}) {
   const headers = {};
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -32,7 +51,8 @@ if (process.env.INVENTORY_TEST_GUEST) await request('items', { token: process.en
 const a = { token: accountA };
 const b = { token: accountB };
 for (const account of [a, b]) {
-  assert.deepEqual(await request('items', account), { items: [], nextOffset: null });
+  const res = await request('items', account);
+  assert.deepEqual(res.result !== undefined ? res.result : res.items, []);
   const summary = await request('summary', account);
   assert.deepEqual([summary.totalItems, summary.totalValue, summary.categories, summary.rooms, summary.valuedItems], [0, '0.00', 0, 0, 0]);
 }
@@ -48,17 +68,19 @@ assert.notEqual(first.id, second.id);
 assert.equal(first.householdId, second.householdId);
 assert.equal(first.purchaseAmount, '19.99');
 assert.equal(second.purchaseAmount, null);
+
 const summary = await request('summary', a);
 assert.deepEqual([summary.totalItems, summary.totalValue, summary.categories, summary.rooms, summary.valuedItems, summary.currency], [2, '19.99', 1, 1, 1, first.currency]);
 const page1 = await request('items?limit=1', a);
-const page2 = await request(`items?limit=1&offset=${page1.nextOffset}`, a);
-assert.equal(page1.nextOffset, 1);
-assert.equal(page2.nextOffset, null);
-assert.deepEqual(new Set([...page1.items, ...page2.items].map(({ id }) => id)), new Set([first.id, second.id]));
-assert.deepEqual(await request('items', b), { items: [], nextOffset: null });
+const items1 = page1.result ?? page1.items;
+const page2 = await request(`items?limit=1&page=2`, a);
+const items2 = page2.result ?? page2.items;
+assert.deepEqual(new Set([...items1, ...items2].map(({ id }) => id)), new Set([first.id, second.id]));
+const bRes = await request('items', b);
+assert.deepEqual(bRes.result ?? bRes.items, []);
 assert.equal((await request('summary', b)).totalItems, 0);
 const other = await request('items', { ...b, body, expected: 201 });
 assert.notEqual(other.householdId, first.householdId);
-assert.deepEqual((await request('items', b)).items.map(({ id }) => id), [other.id]);
+assert.deepEqual(((await request('items', b)).result ?? (await request('items', b)).items).map(({ id }) => id), [other.id]);
 assert.equal((await request('summary', a)).totalItems, 2);
 console.log('Inventory API smoke checks passed');

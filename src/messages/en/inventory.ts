@@ -9,6 +9,9 @@ export const InventoryMessages = {
     LIST_WARRANTIES: 'List active inventory warranty options',
     CREATE_ITEM: 'Create an inventory item',
     LIST_ITEMS: 'List my inventory items',
+    GET_ITEM: 'Get inventory item details',
+    UPDATE_ITEM_STATUS: 'Update inventory item active status',
+    DELETE_ITEM: 'Soft delete an inventory item',
     INVENTORY_SUMMARY: 'Get my inventory summary',
 
     // Swagger descriptions
@@ -30,6 +33,15 @@ export const InventoryMessages = {
     LIST_ITEMS_DESCRIPTION:
         'Returns paginated inventory items belonging to households ' +
         'where the authenticated user is currently an active member.',
+
+    GET_ITEM_DESCRIPTION:
+        'Retrieves complete details of an inventory item belonging to the authenticated user, including dynamically evaluated warranty expiration status.',
+
+    UPDATE_ITEM_STATUS_DESCRIPTION:
+        'Enables or disables an inventory item for the authenticated user without removing it.',
+
+    DELETE_ITEM_DESCRIPTION:
+        'Deactivates and soft-deletes an inventory item from the user view while retaining the record in the database.',
 
     INVENTORY_SUMMARY_DESCRIPTION:
         'Returns aggregated inventory metrics for the authenticated user, including ' +
@@ -83,10 +95,14 @@ export const InventoryMessages = {
     ROOMS_RETRIEVED: 'Inventory rooms retrieved',
     WARRANTIES_RETRIEVED: 'Inventory warranties retrieved',
     ITEM_CREATED: 'Inventory item created',
+    ITEM_RETRIEVED: 'Inventory item retrieved',
     ITEMS_RETRIEVED: 'Inventory items retrieved',
+    ITEM_STATUS_UPDATED: 'Inventory item status updated',
+    ITEM_DELETED: 'Inventory item deleted successfully',
     SUMMARY_RETRIEVED: 'Inventory summary retrieved',
 
     // Error messages
+    ITEM_NOT_FOUND: 'Inventory item not found',
     UNAUTHORIZED: 'Missing or invalid access token',
     FORBIDDEN: 'A verified account is required',
     INVALID_ITEM: 'Invalid item data or inactive lookup code',
@@ -128,6 +144,8 @@ export const InventoryMessages = {
 
     VALIDATION_PURCHASE_AMOUNT_INVALID:
         'Purchase amount must be a non-negative decimal with up to 2 decimal places',
+
+    VALIDATION_IS_ACTIVE_INVALID: 'isActive must be a boolean',
 
     VALIDATION_LIMIT_INVALID: 'Limit must be a positive integer',
     VALIDATION_OFFSET_INVALID: 'Offset must be a non-negative integer',

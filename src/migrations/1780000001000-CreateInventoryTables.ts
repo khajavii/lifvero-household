@@ -1,8 +1,16 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
+/**
+ * Migration to create tables for rooms, categories, warranty options, and inventory items.
+ */
 export class CreateInventoryTables1780000001000
     implements MigrationInterface
 {
+  /**
+   * Executes the table creation queries and constraints.
+   *
+   * @param queryRunner - TypeORM query runner.
+   */
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE TABLE household.inventory_rooms (
@@ -117,6 +125,11 @@ export class CreateInventoryTables1780000001000
     `);
   }
 
+  /**
+   * Drops all inventory tables in reverse dependency order.
+   *
+   * @param queryRunner - TypeORM query runner.
+   */
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`DROP TABLE household.inventory_items`);
     await queryRunner.query(`DROP TABLE household.inventory_warranty_options`);

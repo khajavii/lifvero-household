@@ -246,23 +246,23 @@ export class PersonalInventoryController {
    */
   @Get('items/:id')
   @ApiOperation({
-    summary: 'Get inventory item details',
-    description: 'Retrieves complete details of an inventory item belonging to the authenticated user, including dynamically evaluated warranty expiration status.',
+    summary: messages.inventory.GET_ITEM,
+    description: messages.inventory.GET_ITEM_DESCRIPTION,
   })
   @ApiParam({
     name: 'id',
     type: String,
     format: 'uuid',
-    description: 'The UUID of the inventory item',
+    description: messages.inventory.ITEM_ID_DESCRIPTION,
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Inventory item retrieved successfully',
+    description: messages.inventory.ITEM_RETRIEVED,
     type: InventoryItemDto,
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
-    description: 'Inventory item not found',
+    description: messages.inventory.ITEM_NOT_FOUND,
   })
   async findOne(
       @CurrentAccountId() userId: string,
@@ -270,7 +270,7 @@ export class PersonalInventoryController {
   ) {
     return ResponseHelper.success(
         await this.inventory.findById(userId, id),
-        'Inventory item retrieved',
+        messages.inventory.ITEM_RETRIEVED,
     );
   }
 
@@ -279,26 +279,26 @@ export class PersonalInventoryController {
    */
   @Patch('items/:id/status')
   @ApiOperation({
-    summary: 'Update inventory item active status',
-    description: 'Enables or disables an inventory item for the authenticated user without removing it.',
+    summary: messages.inventory.UPDATE_ITEM_STATUS,
+    description: messages.inventory.UPDATE_ITEM_STATUS_DESCRIPTION,
   })
   @ApiParam({
     name: 'id',
     type: String,
     format: 'uuid',
-    description: 'The UUID of the inventory item',
+    description: messages.inventory.ITEM_ID_DESCRIPTION,
   })
   @ApiBody({
     type: UpdateInventoryStatusDto,
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Inventory item status updated successfully',
+    description: messages.inventory.ITEM_STATUS_UPDATED,
     type: InventoryItemDto,
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
-    description: 'Inventory item not found',
+    description: messages.inventory.ITEM_NOT_FOUND,
   })
   async updateStatus(
       @CurrentAccountId() userId: string,
@@ -307,7 +307,7 @@ export class PersonalInventoryController {
   ) {
     return ResponseHelper.success(
         await this.inventory.updateStatus(userId, id, body.isActive),
-        'Inventory item status updated',
+        messages.inventory.ITEM_STATUS_UPDATED,
     );
   }
 
@@ -316,22 +316,22 @@ export class PersonalInventoryController {
    */
   @Delete('items/:id')
   @ApiOperation({
-    summary: 'Soft delete an inventory item',
-    description: 'Deactivates and soft-deletes an inventory item from the user view while retaining the record in the database.',
+    summary: messages.inventory.DELETE_ITEM,
+    description: messages.inventory.DELETE_ITEM_DESCRIPTION,
   })
   @ApiParam({
     name: 'id',
     type: String,
     format: 'uuid',
-    description: 'The UUID of the inventory item',
+    description: messages.inventory.ITEM_ID_DESCRIPTION,
   })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Inventory item deleted successfully',
+    description: messages.inventory.ITEM_DELETED,
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
-    description: 'Inventory item not found',
+    description: messages.inventory.ITEM_NOT_FOUND,
   })
   async delete(
       @CurrentAccountId() userId: string,
@@ -340,7 +340,7 @@ export class PersonalInventoryController {
     await this.inventory.delete(userId, id);
     return ResponseHelper.success(
         null,
-        'Inventory item deleted successfully',
+        messages.inventory.ITEM_DELETED,
     );
   }
 

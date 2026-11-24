@@ -1,7 +1,16 @@
+/**
+ * Unit test suite verifying createInventoryClient authentication flows and inventory submissions.
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createInventoryClient } from '../examples/inventory-client.mjs';
 
+/**
+ * Creates a mock fixture recording outbound HTTP requests.
+ *
+ * @param authPayload - Simulated response payload from the auth endpoint.
+ * @returns Object containing the mock client and recorded calls array.
+ */
 function fixture(authPayload = {}) {
   const calls = [];
   const client = createInventoryClient({

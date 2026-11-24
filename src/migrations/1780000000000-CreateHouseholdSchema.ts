@@ -1,8 +1,16 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
+/**
+ * Migration to create the dedicated `household` schema and core membership tables.
+ */
 export class CreateHouseholdSchema1780000000000
   implements MigrationInterface
 {
+  /**
+   * Executes the migration schema definition queries.
+   *
+   * @param queryRunner - TypeORM query runner.
+   */
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       CREATE SCHEMA household
@@ -85,6 +93,11 @@ export class CreateHouseholdSchema1780000000000
     `);
   }
 
+  /**
+   * Reverts changes made in the up migration.
+   *
+   * @param queryRunner - TypeORM query runner.
+   */
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DROP TABLE household.household_members

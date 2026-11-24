@@ -1,4 +1,3 @@
-
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -12,6 +11,12 @@ import { HouseholdMemberEntity } from '../household-members/entities/household-m
 import { HouseholdsRepository } from './repositories/households.repository';
 import { PostgresHouseholdsRepository } from './repositories/postgres-households.repository';
 
+/**
+ * Encapsulates household management and membership resolution.
+ *
+ * Exposes household operations and exports database entities for cross-module
+ * consumption while preserving modular separation of concerns.
+ */
 @Module({
   imports: [
     ConfigModule.forFeature(householdsConfig),
@@ -39,4 +44,3 @@ import { PostgresHouseholdsRepository } from './repositories/postgres-households
   ],
 })
 export class HouseholdsModule {}
-

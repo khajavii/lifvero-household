@@ -1,6 +1,14 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
+/**
+ * Migration to add purchase valuation columns (`purchase_amount` and `currency`) and check constraints to `inventory_items`.
+ */
 export class AddInventoryValuation1780000003000 implements MigrationInterface {
+  /**
+   * Adds valuation columns and checks to household.inventory_items.
+   *
+   * @param queryRunner - TypeORM query runner.
+   */
   async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       ALTER TABLE household.inventory_items
@@ -18,6 +26,11 @@ export class AddInventoryValuation1780000003000 implements MigrationInterface {
     `);
   }
 
+  /**
+   * Reverts valuation columns, index, and check constraints.
+   *
+   * @param queryRunner - TypeORM query runner.
+   */
   async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query('DROP INDEX household.inventory_items_creator_created_idx');
     await queryRunner.query(`

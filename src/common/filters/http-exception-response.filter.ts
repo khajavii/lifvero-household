@@ -8,12 +8,30 @@ import {
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 
+/**
+ * Global exception filter ensuring standardized JSON error responses across the application.
+ *
+ * Catches all HTTP and unhandled exceptions, formatting them into a consistent structure:
+ * `{ error: true, statusCode: number, message: string, data: any }`.
+ */
 @Catch()
 export class HttpExceptionResponseFilter implements ExceptionFilter {
+  /** Logger instance for capturing error traces. */
   private readonly logger = new Logger(HttpExceptionResponseFilter.name);
 
+  /**
+   * Initializes the exception filter with the HTTP adapter host.
+   *
+   * @param adapterHost - Provides access to the underlying platform HTTP adapter.
+   */
   constructor(private readonly adapterHost: HttpAdapterHost) {}
 
+  /**
+   * Intercepts and transforms unhandled exceptions into formatted HTTP responses.
+   *
+   * @param exception - The caught error or exception instance.
+   * @param host - Execution context providing access to HTTP request and response objects.
+   */
   catch(exception: unknown, host: ArgumentsHost): void {
     const isHttp = exception instanceof HttpException;
     const status = isHttp ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;

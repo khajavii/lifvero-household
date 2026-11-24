@@ -308,7 +308,7 @@ export class UpdateInventoryStatusDto {
     return value;
   })
   @IsBoolean({
-    message: 'isActive must be a boolean',
+    message: messages.inventory.VALIDATION_IS_ACTIVE_INVALID,
   })
   isActive!: boolean;
 }
