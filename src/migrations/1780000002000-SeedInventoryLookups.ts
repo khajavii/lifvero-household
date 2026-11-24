@@ -1,8 +1,16 @@
 import type { MigrationInterface, QueryRunner } from 'typeorm';
 
+/**
+ * Migration to seed default inventory lookup data including rooms, categories, and warranty options.
+ */
 export class SeedInventoryLookups1780000002000
   implements MigrationInterface
 {
+  /**
+   * Inserts predefined catalog options into inventory lookup tables.
+   *
+   * @param queryRunner - TypeORM query runner.
+   */
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       INSERT INTO household.inventory_rooms
@@ -52,6 +60,11 @@ export class SeedInventoryLookups1780000002000
     `);
   }
 
+  /**
+   * Removes seeded lookup entries.
+   *
+   * @param queryRunner - TypeORM query runner.
+   */
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
       DELETE FROM household.inventory_warranty_options

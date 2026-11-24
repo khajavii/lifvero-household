@@ -16,7 +16,7 @@ INSERT INTO household.households (
 )
 VALUES (
     '11111111-1111-4111-8111-111111111111',
-    'Demo Household'
+    'Demo HouseholdEntity'
 )
 ON CONFLICT (id) DO NOTHING;
 
