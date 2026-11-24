@@ -185,14 +185,37 @@ export class CreateInventoryItemDto implements NewInventoryItem {
 }
 
 /**
- * Data transfer object for inventory pagination query parameters.
+ * Data transfer object for inventory pagination and search query parameters.
  */
 export class InventoryPageQueryDto {
+  /**
+   * Page number (starts at 1).
+   */
+  @ApiPropertyOptional({
+    type: Number,
+    example: 1,
+    description: 'Current page number',
+  })
+  @ValidateIf(provided)
+  @Transform(queryInt)
+  @IsInt({
+    message: messages.inventory.VALIDATION_LIMIT_INVALID,
+  })
+  @Min(1, {
+    message: messages.inventory.VALIDATION_LIMIT_INVALID,
+  })
+  page?: number;
+
   /**
    * Maximum number of inventory items to return.
    *
    * Defaults to the server-configured page size.
    */
+  @ApiPropertyOptional({
+    type: Number,
+    example: 10,
+    description: 'Number of items per page',
+  })
   @ValidateIf(provided)
   @Transform(queryInt)
   @IsInt({
@@ -207,10 +230,15 @@ export class InventoryPageQueryDto {
   limit?: number;
 
   /**
-   * Number of inventory items to skip.
+   * Number of inventory items to skip (optional alternative to page).
    *
    * Defaults to zero.
    */
+  @ApiPropertyOptional({
+    type: Number,
+    example: 0,
+    description: 'Number of items to skip',
+  })
   @ValidateIf(provided)
   @Transform(queryInt)
   @IsInt({
@@ -223,4 +251,40 @@ export class InventoryPageQueryDto {
     message: messages.inventory.VALIDATION_OFFSET_INVALID,
   })
   offset?: number;
+
+  /**
+   * Search term matching item name.
+   */
+  @ApiPropertyOptional({
+    type: String,
+    example: 'Laptop',
+    description: 'Search by item name',
+    maxLength: 150,
+  })
+  @ValidateIf(provided)
+  @Transform(trim)
+  @IsString({
+    message: messages.inventory.VALIDATION_ITEM_NAME_INVALID,
+  })
+  @MaxLength(150, {
+    message: messages.inventory.VALIDATION_ITEM_NAME_LENGTH,
+  })
+  search?: string;
+
+  /**
+   * Category code filter.
+   */
+  @ApiPropertyOptional({
+    type: String,
+    example: 'electronics',
+    description: 'Filter by category code',
+    maxLength: 40,
+  })
+  @ValidateIf(provided)
+  @Transform(trim)
+  @IsString({
+    message: messages.inventory.VALIDATION_CATEGORY_CODE_INVALID,
+  })
+  @MaxLength(40)
+  categoryCode?: string;
 }

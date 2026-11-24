@@ -11,6 +11,7 @@ import type { DataSource, EntityManager } from 'typeorm';
 import { messages } from '../../messages';
 import { HouseholdsService } from '../households/households.service';
 import { inventoryConfig } from './config/inventory.config';
+import { PaginationResource } from '../../common/pagination';
 
 import type {
   CreateInventoryItemDto,
@@ -68,11 +69,11 @@ export class InventoryCatalogService {
 }
 
 /**
- * Represents a paginated collection of personal inventory items.
+ * Represents a paginated collection of personal inventory items in Laravel resource style.
  */
 export interface PersonalInventoryPage {
-  items: InventoryItem[];
-  nextOffset: number | null;
+  result: InventoryItem[];
+  pagination: PaginationResource;
 }
 
 /**
@@ -142,14 +143,13 @@ export class PersonalInventoryService {
   }
 
   /**
-   * Retrieves a paginated list of the user's inventory items.
+   * Retrieves a paginated list of the user's inventory items with search and category filtering.
    *
-   * The repository fetches one additional record to determine
-   * whether another page is available.
+   * Supports both page-based and offset-based pagination.
    *
    * @param userId - The authenticated account identifier.
-   * @param query - Pagination parameters.
-   * @returns The requested inventory page and its continuation offset.
+   * @param query - Pagination parameters and filters.
+   * @returns The requested inventory page and pagination meta in Laravel resource style.
    * @throws BadRequestException When pagination bounds are invalid.
    */
   async list(
@@ -157,12 +157,15 @@ export class PersonalInventoryService {
       query: InventoryPageQueryDto,
   ): Promise<PersonalInventoryPage> {
     const limit = query.limit ?? this.config.pageSize;
-    const offset = query.offset ?? 0;
+    const page = query.page ?? (query.offset !== undefined ? Math.floor(query.offset / limit) + 1 : 1);
+    const offset = query.offset ?? (page - 1) * limit;
 
     if (
         !Number.isSafeInteger(limit) ||
         limit < 1 ||
         limit > this.config.maxPageSize ||
+        !Number.isSafeInteger(page) ||
+        page < 1 ||
         !Number.isSafeInteger(offset) ||
         offset < 0 ||
         !Number.isSafeInteger(offset + limit)
@@ -172,16 +175,30 @@ export class PersonalInventoryService {
       );
     }
 
-    const rows = await this.items.list(userId, {
-      limit: limit + 1,
-      offset,
-    });
+    const filterCriteria = {
+      search: query.search,
+      categoryCode: query.categoryCode,
+    };
 
-    const hasNextPage = rows.length > limit;
+    const [items, total] = await Promise.all([
+      this.items.list(userId, {
+        limit,
+        offset,
+        ...filterCriteria,
+      }),
+      this.items.count(userId, filterCriteria),
+    ]);
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
 
     return {
-      items: rows.slice(0, limit),
-      nextOffset: hasNextPage ? offset + limit : null,
+      result: items,
+      pagination: PaginationResource.make({
+        currentPage: page,
+        totalPages,
+        perPage: limit,
+        total,
+      }),
     };
   }
 

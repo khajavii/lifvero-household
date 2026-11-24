@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { messages } from '../../../messages';
+import { PaginationResource } from '../../../common/pagination';
 
 /**
  * Represents a generic inventory lookup response.
@@ -124,22 +125,20 @@ export class InventoryItemDto {
 }
 
 /**
- * Represents a paginated inventory response.
+ * Represents a paginated inventory response in Laravel-style resource format.
  */
 export class InventoryPageDto {
   @ApiProperty({
     type: [InventoryItemDto],
     description: messages.inventory.LIST_ITEMS_DESCRIPTION,
   })
-  items!: InventoryItemDto[];
+  result!: InventoryItemDto[];
 
   @ApiProperty({
-    type: Number,
-    nullable: true,
-    example: 20,
-    description: 'Offset for the next page. Null when no more items exist.',
+    type: PaginationResource,
+    description: 'Pagination metadata',
   })
-  nextOffset!: number | null;
+  pagination!: PaginationResource;
 }
 
 /**

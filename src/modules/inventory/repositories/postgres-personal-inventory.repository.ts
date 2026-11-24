@@ -134,15 +134,36 @@ export class PostgresPersonalInventoryRepository
   }
 
   /**
+   * Counts total inventory items belonging to a user matching the query criteria.
+   *
+   * @param userId - The ID of the user whose inventory is being counted.
+   * @param query - The filter criteria.
+   * @returns A promise resolving to the total item count.
+   */
+  async count(
+      userId: string,
+      query?: Pick<InventoryPageQuery, 'search' | 'categoryCode'>,
+  ): Promise<number> {
+    const qb = this.db
+        .createQueryBuilder()
+        .from(InventoryItemEntity, 'i')
+        .select('COUNT(*)::text', 'total');
+
+    this.applyPersonalScope(qb, userId);
+    this.applyFilters(qb, query);
+
+    const result = await qb.getRawOne<{ total: string }>();
+    return Number(result?.total ?? 0);
+  }
+
+  /**
    * Retrieves a paginated list of inventory items belonging to a user.
    *
    * Only items created by the specified user in households where
    * the user is still an active member are included.
    *
-   * An additional record is fetched to determine whether another page exists.
-   *
    * @param userId - The ID of the inventory owner.
-   * @param page - The pagination limit and offset.
+   * @param page - The pagination limit, offset, and search filters.
    * @returns A promise resolving to the inventory items.
    */
   async list(
@@ -156,11 +177,12 @@ export class PostgresPersonalInventoryRepository
     );
 
     this.applyPersonalScope(query, userId);
+    this.applyFilters(query, page);
 
     return query
         .orderBy('i.created_at', 'DESC')
         .addOrderBy('i.id', 'DESC')
-        .limit(page.limit + 1)
+        .limit(page.limit)
         .offset(page.offset)
         .getRawMany<InventoryItem>();
   }
@@ -319,5 +341,32 @@ export class PostgresPersonalInventoryRepository
         .where('i.created_by = :userId', { userId })
         .andWhere(`EXISTS ${membershipQuery}`)
         .setParameter('userId', userId);
+  }
+
+  /**
+   * Applies optional search and category filters to the inventory query.
+   *
+   * @param query - The query builder instance.
+   * @param filters - The search and category filter criteria.
+   */
+  private applyFilters(
+      query: SelectQueryBuilder<any>,
+      filters?: Pick<InventoryPageQuery, 'search' | 'categoryCode'>,
+  ): void {
+    if (!filters) {
+      return;
+    }
+
+    if (filters.search && filters.search.trim().length > 0) {
+      query.andWhere('i.item_name ILIKE :search', {
+        search: `%${filters.search.trim()}%`,
+      });
+    }
+
+    if (filters.categoryCode && filters.categoryCode.trim().length > 0) {
+      query.andWhere('i.category_code = :categoryCode', {
+        categoryCode: filters.categoryCode.trim(),
+      });
+    }
   }
 }

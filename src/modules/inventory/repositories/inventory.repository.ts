@@ -139,7 +139,7 @@ export abstract class InventoryCatalogRepository {
 }
 
 /**
- * Defines pagination parameters for inventory queries.
+ * Defines pagination and filter parameters for inventory queries.
  */
 export interface InventoryPageQuery {
   /** The maximum number of inventory items to retrieve. */
@@ -147,6 +147,12 @@ export interface InventoryPageQuery {
 
   /** The number of inventory items to skip. */
   offset: number;
+
+  /** Optional search term matching item name. */
+  search?: string;
+
+  /** Optional filter by category code. */
+  categoryCode?: string;
 }
 
 /**
@@ -192,6 +198,18 @@ export abstract class PersonalInventoryRepository {
       settings: InventoryWriteSettings,
       manager: EntityManager,
   ): Promise<InventoryItem>;
+
+  /**
+   * Counts total inventory items belonging to a user matching the query criteria.
+   *
+   * @param userId - The ID of the user whose inventory is being counted.
+   * @param query - The filter criteria.
+   * @returns A promise resolving to the total item count.
+   */
+  abstract count(
+      userId: string,
+      query?: Pick<InventoryPageQuery, 'search' | 'categoryCode'>,
+  ): Promise<number>;
 
   /**
    * Retrieves a paginated list of inventory items belonging to a user.

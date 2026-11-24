@@ -177,7 +177,7 @@ export class PersonalInventoryController {
   }
 
   /**
-   * Retrieves paginated inventory items.
+   * Retrieves paginated inventory items with optional search and category filters.
    */
   @Get('items')
   @ApiOperation({
@@ -195,6 +195,26 @@ export class PersonalInventoryController {
     required: false,
     type: Number,
     example: 10,
+  })
+  @ApiQuery({
+    name: 'offset',
+    required: false,
+    type: Number,
+    example: 0,
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    example: 'Laptop',
+    description: 'Search term for item name',
+  })
+  @ApiQuery({
+    name: 'categoryCode',
+    required: false,
+    type: String,
+    example: 'electronics',
+    description: 'Filter by category code',
   })
   @ApiResponse({
     status: HttpStatus.OK,
