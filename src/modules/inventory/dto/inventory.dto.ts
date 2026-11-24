@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsInt,
   IsISO8601,
   IsString,
@@ -288,3 +289,27 @@ export class InventoryPageQueryDto {
   @MaxLength(40)
   categoryCode?: string;
 }
+
+/**
+ * Data transfer object for updating the active status of an inventory item.
+ */
+export class UpdateInventoryStatusDto {
+  /**
+   * Whether the inventory item is active.
+   */
+  @ApiProperty({
+    type: Boolean,
+    example: false,
+    description: 'Active status of the inventory item',
+  })
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === 'true' || value === true || value === 1 || value === '1') return true;
+    if (value === 'false' || value === false || value === 0 || value === '0') return false;
+    return value;
+  })
+  @IsBoolean({
+    message: 'isActive must be a boolean',
+  })
+  isActive!: boolean;
+}
+

@@ -32,6 +32,12 @@ export class InventoryItemEntity {
   @Column({ name: 'created_by', type: 'varchar', length: 255 })
   createdBy!: string;
 
+  @Column({ name: 'is_active', type: 'boolean', default: true })
+  isActive!: boolean;
+
+  @Column({ name: 'deleted_at', type: 'timestamptz', nullable: true })
+  deletedAt!: Date | null;
+
   @Column({ name: 'created_at', type: 'timestamptz', default: () => 'now()' })
   createdAt!: Date;
 

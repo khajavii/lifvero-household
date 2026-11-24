@@ -9,6 +9,7 @@ import {
   InventoryWarrantyOptionEntity,
 } from '../entities/inventory-lookups.entity';
 import { HouseholdMemberEntity } from '../../household-members/entities/household-member.entity';
+import { calculateWarrantyStatus, WarrantyStatus } from '../utils/warranty-status.util';
 import {
   InvalidInventoryLookupError,
   InventoryItem,
@@ -51,8 +52,39 @@ function selectInventoryColumns(
       .addSelect('i.warranty_code', 'warrantyCode')
       .addSelect('i.purchase_amount::text', 'purchaseAmount')
       .addSelect('i.currency', 'currency')
+      .addSelect('i.is_active', 'isActive')
       .addSelect('i.created_at', 'createdAt')
-      .addSelect('i.updated_at', 'updatedAt');
+      .addSelect('i.updated_at', 'updatedAt')
+      .addSelect('w.duration_months', 'warrantyDurationMonths')
+      .addSelect('w.is_lifetime', 'warrantyIsLifetime');
+}
+
+/**
+ * Maps raw query row to InventoryItem with calculated warranty status.
+ *
+ * @param row - The raw SQL row.
+ * @returns InventoryItem domain object.
+ */
+function mapInventoryRow(row: any): InventoryItem {
+  return {
+    id: row.id,
+    householdId: row.householdId,
+    itemName: row.itemName,
+    roomCode: row.roomCode,
+    categoryCode: row.categoryCode,
+    purchaseDate: row.purchaseDate,
+    warrantyCode: row.warrantyCode,
+    purchaseAmount: row.purchaseAmount,
+    currency: row.currency,
+    isActive: Boolean(row.isActive),
+    warrantyStatus: calculateWarrantyStatus(
+        row.purchaseDate,
+        row.warrantyDurationMonths,
+        row.warrantyIsLifetime,
+    ),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
 }
 
 /**
@@ -173,18 +205,120 @@ export class PostgresPersonalInventoryRepository
     const query = selectInventoryColumns(
         this.db
             .createQueryBuilder()
-            .from(InventoryItemEntity, 'i'),
+            .from(InventoryItemEntity, 'i')
+            .leftJoin(
+                InventoryWarrantyOptionEntity,
+                'w',
+                'w.code = i.warranty_code',
+            ),
     );
 
     this.applyPersonalScope(query, userId);
     this.applyFilters(query, page);
 
-    return query
+    const rows = await query
         .orderBy('i.created_at', 'DESC')
         .addOrderBy('i.id', 'DESC')
         .limit(page.limit)
         .offset(page.offset)
-        .getRawMany<InventoryItem>();
+        .getRawMany();
+
+    return rows.map(mapInventoryRow);
+  }
+
+  /**
+   * Retrieves an inventory item by ID for the specified user.
+   *
+   * @param userId - The ID of the inventory owner.
+   * @param itemId - The UUID of the inventory item.
+   * @returns A promise resolving to the inventory item or null if not found.
+   */
+  async findById(
+      userId: string,
+      itemId: string,
+  ): Promise<InventoryItem | null> {
+    const query = selectInventoryColumns(
+        this.db
+            .createQueryBuilder()
+            .from(InventoryItemEntity, 'i')
+            .leftJoin(
+                InventoryWarrantyOptionEntity,
+                'w',
+                'w.code = i.warranty_code',
+            ),
+    );
+
+    this.applyPersonalScope(query, userId);
+
+    const row = await query
+        .andWhere('i.id = :itemId', { itemId })
+        .getRawOne();
+
+    return row ? mapInventoryRow(row) : null;
+  }
+
+  /**
+   * Updates the active status of an inventory item.
+   *
+   * @param userId - The ID of the inventory owner.
+   * @param itemId - The UUID of the inventory item.
+   * @param isActive - The new active state.
+   * @returns A promise resolving to the updated inventory item or null if not found.
+   */
+  async updateActiveStatus(
+      userId: string,
+      itemId: string,
+      isActive: boolean,
+  ): Promise<InventoryItem | null> {
+    const item = await this.findById(userId, itemId);
+    if (!item) {
+      return null;
+    }
+
+    await this.db
+        .createQueryBuilder()
+        .update(InventoryItemEntity)
+        .set({
+          isActive,
+          updatedAt: () => 'now()',
+        })
+        .where('id = :itemId', { itemId })
+        .andWhere('createdBy = :userId', { userId })
+        .execute();
+
+    return this.findById(userId, itemId);
+  }
+
+  /**
+   * Soft deletes an inventory item.
+   *
+   * @param userId - The ID of the inventory owner.
+   * @param itemId - The UUID of the inventory item.
+   * @returns A promise resolving to true if deleted, or false if not found.
+   */
+  async softDelete(
+      userId: string,
+      itemId: string,
+  ): Promise<boolean> {
+    const item = await this.findById(userId, itemId);
+    if (!item) {
+      return false;
+    }
+
+    const result = await this.db
+        .createQueryBuilder()
+        .update(InventoryItemEntity)
+        .set({
+          isActive: false,
+          deletedAt: () => 'now()',
+          updatedAt: () => 'now()',
+        })
+        .where('id = :itemId', { itemId })
+        .andWhere('createdBy = :userId', { userId })
+        .andWhere('deletedAt IS NULL')
+        .execute();
+
+    return (result.affected ?? 0) > 0;
   }
 
   /**
@@ -305,21 +439,26 @@ export class PostgresPersonalInventoryRepository
     const query = selectInventoryColumns(
         manager
             .createQueryBuilder()
-            .from(InventoryItemEntity, 'i'),
+            .from(InventoryItemEntity, 'i')
+            .leftJoin(
+                InventoryWarrantyOptionEntity,
+                'w',
+                'w.code = i.warranty_code',
+            ),
     );
 
-    const item = await query
+    const row = await query
         .where('i.id = :itemId', { itemId })
-        .getRawOne<InventoryItem>();
+        .getRawOne();
 
-    return item ?? null;
+    return row ? mapInventoryRow(row) : null;
   }
 
   /**
    * Applies the personal inventory access restrictions to a query.
    *
    * An inventory item must have been created by the specified user,
-   * and the user must still be a member of its associated household.
+   * not soft-deleted, and the user must still be a member of its associated household.
    *
    * @param query - The inventory query builder.
    * @param userId - The ID of the inventory owner.
@@ -339,6 +478,7 @@ export class PostgresPersonalInventoryRepository
 
     return query
         .where('i.created_by = :userId', { userId })
+        .andWhere('i.deleted_at IS NULL')
         .andWhere(`EXISTS ${membershipQuery}`)
         .setParameter('userId', userId);
   }

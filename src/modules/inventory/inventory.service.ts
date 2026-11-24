@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { InjectDataSource } from '@nestjs/typeorm';
@@ -200,6 +201,61 @@ export class PersonalInventoryService {
         total,
       }),
     };
+  }
+
+  /**
+   * Retrieves an inventory item by ID ensuring it belongs to the user.
+   *
+   * @param userId - The authenticated account identifier.
+   * @param itemId - The UUID of the inventory item.
+   * @returns The requested inventory item.
+   * @throws NotFoundException When the item does not exist or does not belong to the user.
+   */
+  async findById(userId: string, itemId: string): Promise<InventoryItem> {
+    const item = await this.items.findById(userId, itemId);
+    if (!item) {
+      throw new NotFoundException('Inventory item not found');
+    }
+    return item;
+  }
+
+  /**
+   * Updates the active status of an inventory item.
+   *
+   * @param userId - The authenticated account identifier.
+   * @param itemId - The UUID of the inventory item.
+   * @param isActive - The new active status.
+   * @returns The updated inventory item.
+   * @throws NotFoundException When the item does not exist or does not belong to the user.
+   */
+  async updateStatus(
+      userId: string,
+      itemId: string,
+      isActive: boolean,
+  ): Promise<InventoryItem> {
+    const item = await this.items.updateActiveStatus(userId, itemId, isActive);
+    if (!item) {
+      throw new NotFoundException('Inventory item not found');
+    }
+    return item;
+  }
+
+  /**
+   * Soft deletes an inventory item for the user.
+   *
+   * The item remains in the database with deleted_at set and is_active false.
+   *
+   * @param userId - The authenticated account identifier.
+   * @param itemId - The UUID of the inventory item.
+   * @returns A boolean indicating successful deletion.
+   * @throws NotFoundException When the item does not exist or does not belong to the user.
+   */
+  async delete(userId: string, itemId: string): Promise<boolean> {
+    const deleted = await this.items.softDelete(userId, itemId);
+    if (!deleted) {
+      throw new NotFoundException('Inventory item not found');
+    }
+    return true;
   }
 
   /**

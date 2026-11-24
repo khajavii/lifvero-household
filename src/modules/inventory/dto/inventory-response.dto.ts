@@ -108,6 +108,20 @@ export class InventoryItemDto {
   currency!: string | null;
 
   @ApiProperty({
+    type: Boolean,
+    example: true,
+    description: 'Indicates whether the item is active',
+  })
+  isActive!: boolean;
+
+  @ApiProperty({
+    type: String,
+    example: 'expired',
+    description: 'Warranty status calculated dynamically (active, expired, lifetime, no_warranty)',
+  })
+  warrantyStatus!: string;
+
+  @ApiProperty({
     type: String,
     format: 'date-time',
     example: '2026-01-20T10:30:00.000Z',

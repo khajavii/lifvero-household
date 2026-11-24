@@ -55,6 +55,12 @@ export interface InventoryItem {
   /** The currency associated with the purchase amount, or null if unavailable. */
   currency: string | null;
 
+  /** Indicates whether the item is active. */
+  isActive: boolean;
+
+  /** The warranty expiration status string (e.g. active, expired, lifetime, no_warranty). */
+  warrantyStatus: string;
+
   /** The date and time when the inventory item was created. */
   createdAt: Date;
 
@@ -222,6 +228,46 @@ export abstract class PersonalInventoryRepository {
       userId: string,
       page: InventoryPageQuery,
   ): Promise<InventoryItem[]>;
+
+  /**
+   * Retrieves an inventory item by ID for the specified user.
+   *
+   * @param userId - The ID of the inventory owner.
+   * @param itemId - The UUID of the inventory item.
+   * @returns A promise resolving to the inventory item or null if not found.
+   */
+  abstract findById(
+      userId: string,
+      itemId: string,
+  ): Promise<InventoryItem | null>;
+
+  /**
+   * Updates the active status of an inventory item belonging to the specified user.
+   *
+   * @param userId - The ID of the inventory owner.
+   * @param itemId - The UUID of the inventory item.
+   * @param isActive - The new active state.
+   * @returns A promise resolving to the updated inventory item or null if not found.
+   */
+  abstract updateActiveStatus(
+      userId: string,
+      itemId: string,
+      isActive: boolean,
+  ): Promise<InventoryItem | null>;
+
+  /**
+   * Soft deletes an inventory item belonging to the specified user.
+   *
+   * Sets deleted_at to current timestamp and is_active to false.
+   *
+   * @param userId - The ID of the inventory owner.
+   * @param itemId - The UUID of the inventory item.
+   * @returns A promise resolving to true if deleted, or false if not found.
+   */
+  abstract softDelete(
+      userId: string,
+      itemId: string,
+  ): Promise<boolean>;
 
   /**
    * Retrieves an aggregated inventory summary for a user.

@@ -2,8 +2,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -12,6 +16,7 @@ import {
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiParam,
   ApiTags,
   ApiResponse,
   ApiBody,
@@ -31,6 +36,7 @@ import {
 import {
   CreateInventoryItemDto,
   InventoryPageQueryDto,
+  UpdateInventoryStatusDto,
 } from './dto/inventory.dto';
 
 import {
@@ -232,6 +238,109 @@ export class PersonalInventoryController {
     return ResponseHelper.success(
         await this.inventory.list(userId, query),
         messages.inventory.ITEMS_RETRIEVED,
+    );
+  }
+
+  /**
+   * Retrieves an inventory item's details by ID.
+   */
+  @Get('items/:id')
+  @ApiOperation({
+    summary: 'Get inventory item details',
+    description: 'Retrieves complete details of an inventory item belonging to the authenticated user, including dynamically evaluated warranty expiration status.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    format: 'uuid',
+    description: 'The UUID of the inventory item',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Inventory item retrieved successfully',
+    type: InventoryItemDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Inventory item not found',
+  })
+  async findOne(
+      @CurrentAccountId() userId: string,
+      @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return ResponseHelper.success(
+        await this.inventory.findById(userId, id),
+        'Inventory item retrieved',
+    );
+  }
+
+  /**
+   * Updates an inventory item's active status (activate or deactivate).
+   */
+  @Patch('items/:id/status')
+  @ApiOperation({
+    summary: 'Update inventory item active status',
+    description: 'Enables or disables an inventory item for the authenticated user without removing it.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    format: 'uuid',
+    description: 'The UUID of the inventory item',
+  })
+  @ApiBody({
+    type: UpdateInventoryStatusDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Inventory item status updated successfully',
+    type: InventoryItemDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Inventory item not found',
+  })
+  async updateStatus(
+      @CurrentAccountId() userId: string,
+      @Param('id', ParseUUIDPipe) id: string,
+      @Body() body: UpdateInventoryStatusDto,
+  ) {
+    return ResponseHelper.success(
+        await this.inventory.updateStatus(userId, id, body.isActive),
+        'Inventory item status updated',
+    );
+  }
+
+  /**
+   * Soft deletes an inventory item.
+   */
+  @Delete('items/:id')
+  @ApiOperation({
+    summary: 'Soft delete an inventory item',
+    description: 'Deactivates and soft-deletes an inventory item from the user view while retaining the record in the database.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    format: 'uuid',
+    description: 'The UUID of the inventory item',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Inventory item deleted successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Inventory item not found',
+  })
+  async delete(
+      @CurrentAccountId() userId: string,
+      @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.inventory.delete(userId, id);
+    return ResponseHelper.success(
+        null,
+        'Inventory item deleted successfully',
     );
   }
 

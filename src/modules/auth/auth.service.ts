@@ -8,15 +8,4 @@ export class AuthService {
         private readonly authClient: AuthClient,
     ) {}
 
-    /**
-     * Authenticates or registers a user using their email address.
-     *
-     * @param input - The authentication data.
-     * @returns The authentication result.
-     */
-    async loginOrRegister(
-        input: GuestAuthDto,
-    ): Promise<AuthResult> {
-        return this.authClient.loginOrRegister(input.email);
-    }
 }
