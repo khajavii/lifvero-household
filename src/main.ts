@@ -12,6 +12,13 @@ async function bootstrap(): Promise<void> {
         logger: ['log', 'error', 'warn', 'debug', 'verbose'],
     });
 
+    app.enableCors({
+        origin: true,
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    });
+
     const httpAdapterHost = app.get(HttpAdapterHost);
 
     app.useGlobalFilters(
