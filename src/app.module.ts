@@ -45,9 +45,6 @@ import { createDatabaseOptions } from './config/database-options';
 
           DB_SSL:
               configService.get<string>('DB_SSL') ?? 'true',
-
-          DB_SSL_CA_PATH:
-              configService.get<string>('DB_SSL_CA_PATH'),
         }),
 
         autoLoadEntities: true,

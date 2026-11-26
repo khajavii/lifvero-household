@@ -1,97 +1,93 @@
-import { readFileSync } from 'node:fs';
 import type { DataSourceOptions } from 'typeorm';
-import {messages} from "../messages";
+import { messages } from '../messages';
 
 /**
  * Creates PostgreSQL database connection options from environment variables.
  *
- * Validates the required database configuration, port number, and SSL settings.
- * When SSL is enabled, an optional CA certificate is loaded from the configured path.
+ * Configures SSL with `rejectUnauthorized: false` for managed PostgreSQL providers
+ * like Supabase (both locally and on serverless environments like Vercel)
+ * without requiring any external CA certificate files.
  *
  * @param env - Environment variables used to configure the database connection.
  * @returns TypeORM PostgreSQL connection options.
- * @throws Error If a required environment variable is missing or a configuration value is invalid.
- * @throws Error If the configured SSL CA certificate cannot be read.
+ * @throws Error If a required environment variable is missing or invalid.
  */
 export function createDatabaseOptions(
     env: NodeJS.ProcessEnv,
 ): DataSourceOptions {
-  /**
-   * Retrieves a required environment variable.
-   *
-   * @param key - Environment variable name.
-   * @returns The configured environment variable value.
-   * @throws Error If the environment variable is missing or empty.
-   */
-  const required = (key: string): string => {
-    const value = env[key];
+    /**
+     * Retrieves a required environment variable.
+     */
+    const required = (key: string): string => {
+        const value = env[key];
 
-    if (!value) {
-      throw new Error(
-          messages.database.MISSING_ENVIRONMENT_VARIABLE.replace(
-              '{key}',
-              key,
-          ),
-      );
+        if (!value?.trim()) {
+            throw new Error(
+                messages.database.MISSING_ENVIRONMENT_VARIABLE.replace(
+                    '{key}',
+                    key,
+                ),
+            );
+        }
+
+        return value;
+    };
+
+    /**
+     * Validates the database port.
+     */
+    const port = Number(env.DB_PORT ?? '5432');
+
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        throw new Error(messages.database.INVALID_DB_PORT);
     }
 
-    return value;
-  };
+    /**
+     * Validates database SSL configuration.
+     */
+    const ssl = env.DB_SSL ?? 'true';
 
-  /**
-   * Validates and retrieves the database port.
-   */
-  const port = Number(env.DB_PORT ?? '5432');
+    if (ssl !== 'true' && ssl !== 'false') {
+        throw new Error(messages.database.INVALID_DB_SSL);
+    }
 
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(messages.database.INVALID_DB_PORT);
-  }
+    if (env.NODE_ENV === 'production' && ssl === 'false') {
+        throw new Error(
+            messages.database.DB_SSL_REQUIRED_IN_PRODUCTION,
+        );
+    }
 
-  /**
-   * Validates the database SSL configuration.
-   */
-  const ssl = env.DB_SSL ?? 'true';
+    return {
+        type: 'postgres',
 
-  if (ssl !== 'true' && ssl !== 'false') {
-    throw new Error(messages.database.INVALID_DB_SSL);
-  }
+        host: required('DB_HOST'),
+        port,
+        username: required('DB_USERNAME'),
+        password: required('DB_PASSWORD'),
+        database: required('DB_DATABASE'),
 
-  if (env.NODE_ENV === 'production' && ssl === 'false') {
-    throw new Error(messages.database.DB_SSL_REQUIRED_IN_PRODUCTION);
-  }
+        schema: 'public',
 
-  /**
-   * Optional path to the database SSL CA certificate.
-   */
-  const caPath = env.DB_SSL_CA_PATH;
+        synchronize: false,
+        migrationsRun: false,
+        logging: false,
 
-  return {
-    type: 'postgres',
-    host: required('DB_HOST'),
-    port,
-    username: required('DB_USERNAME'),
-    password: required('DB_PASSWORD'),
-    database: required('DB_DATABASE'),
+        /**
+         * SSL configuration:
+         * Uses rejectUnauthorized: false to allow connection to Supabase pooler/direct
+         * without needing a separate certificate file or hitting SELF_SIGNED_CERT_IN_CHAIN.
+         */
+        ssl:
+            ssl === 'true'
+                ? {
+                      rejectUnauthorized: false,
+                  }
+                : false,
 
-    schema: 'public',
-    synchronize: false,
-    migrationsRun: false,
-    logging: false,
-
-    ssl:
-        ssl === 'true'
-            ? {
-              rejectUnauthorized: true,
-              ...(caPath
-                  ? { ca: readFileSync(caPath, 'utf8') }
-                  : {}),
-            }
-            : false,
-
-    extra: {
-      max: 10,
-      connectionTimeoutMillis: 10_000,
-      idleTimeoutMillis: 30_000,
-    },
-  };
+        extra: {
+            max: 10,
+            connectionTimeoutMillis: 10_000,
+            idleTimeoutMillis: 30_000,
+        },
+    };
 }
